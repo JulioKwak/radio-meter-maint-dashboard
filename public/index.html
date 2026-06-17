@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>무선국 원격검침시설 유지보수 자체사업 현황</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <div class="logo-icon">📡</div>
+    <h1>무선국 원격검침시설 유지보수 자체사업 현황</h1>
+    <span class="badge" id="current-date"></span>
+  </header>
+
+  <aside>
+    <div class="sidebar-section">메뉴</div>
+    <button class="nav-item active" onclick="showPage('work')" id="nav-work">
+      <span class="icon">📋</span> 작업현황
+    </button>
+    <button class="nav-item" onclick="showPage('income')" id="nav-income">
+      <span class="icon">💰</span> 수입/지출 현황
+    </button>
+    <button class="nav-item" onclick="showPage('unit')" id="nav-unit">
+      <span class="icon">📄</span> 유지보수 단가표 모음
+    </button>
+    <button class="nav-item" onclick="showPage('expense')" id="nav-expense">
+      <span class="icon">📊</span> 지출관리
+    </button>
+
+    <div class="sidebar-section side-bottom">데이터</div>
+    <button class="nav-item" onclick="document.getElementById('excel-upload').click()">
+      <span class="icon">📥</span> 엑셀 업로드
+    </button>
+    <button class="nav-item" onclick="reloadAll()">
+      <span class="icon">🔄</span> 새로고침
+    </button>
+    <input type="file" id="excel-upload" accept=".xlsx,.xls,.csv" hidden />
+  </aside>
+
+  <main>
+    <div class="page active" id="page-work">
+      <div class="page-header">
+        <div>
+          <h2>📋 작업현황</h2>
+          <div class="subtitle">엑셀 업로드 기준 작업 현황을 조회합니다.</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="document.getElementById('excel-upload').click()">📥 엑셀 업로드</button>
+          <button class="btn btn-primary" onclick="openAddWorkModal()">+ 작업 추가</button>
+        </div>
+      </div>
+
+      <div class="stat-grid three">
+        <div class="stat-card highlighted">
+          <div class="label">📌 전체신청건수</div>
+          <div class="value blue" id="stat-total">0</div>
+          <div class="sub">필터 적용 기준 전체</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">🔄 보완건수</div>
+          <div class="value orange" id="stat-supplement">0</div>
+          <div class="sub">상태: 보완 요청</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">✅ 완료건수</div>
+          <div class="value green" id="stat-done">0</div>
+          <div class="sub">상태: 완료</div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>신청일자 시작</label>
+          <input type="date" id="f-request-start">
+        </div>
+        <div class="filter-group">
+          <label>신청일자 종료</label>
+          <input type="date" id="f-request-end">
+        </div>
+        <div class="filter-group">
+          <label>완료일자 시작</label>
+          <input type="date" id="f-complete-start">
+        </div>
+        <div class="filter-group">
+          <label>완료일자 종료</label>
+          <input type="date" id="f-complete-end">
+        </div>
+        <div class="filter-group">
+          <label>처리기한 시작</label>
+          <input type="date" id="f-due-start">
+        </div>
+        <div class="filter-group">
+          <label>처리기한 종료</label>
+          <input type="date" id="f-due-end">
+        </div>
+        <div class="filter-group">
+          <label>작업자</label>
+          <select id="f-manager"><option value="">전체</option></select>
+        </div>
+        <div class="filter-group">
+          <label>지역별(시/도)</label>
+          <select id="f-region"><option value="">전체</option></select>
+        </div>
+        <div class="filter-group">
+          <label>상태</label>
+          <select id="f-status">
+            <option value="">전체</option>
+            <option>신청</option>
+            <option>보완 요청</option>
+            <option>완료</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="applyWorkFilter()">🔍 검색</button>
+        <button class="btn btn-secondary" onclick="resetWorkFilter()">초기화</button>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <span class="title">작업 목록</span>
+          <span class="muted" id="work-count-label">총 0건</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>No.</th>
+                <th>유지보수 No</th>
+                <th>상태</th>
+                <th>요청일</th>
+                <th>긴급처리 요구일자</th>
+                <th>완료일</th>
+                <th>지역분류</th>
+                <th>담당자</th>
+                <th>결과유형</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody id="work-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="work-page-info">0 - 0 / 0건</span>
+          <div class="page-btns" id="work-page-btns"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-income">
+      <div class="page-header">
+        <div>
+          <h2>💰 수입/지출 현황</h2>
+          <div class="subtitle">완료 건수와 단가표, 지출관리 입력값 기준으로 계산합니다.</div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>일자 시작</label>
+          <input type="date" id="ie-start">
+        </div>
+        <div class="filter-group">
+          <label>일자 종료</label>
+          <input type="date" id="ie-end">
+        </div>
+        <button class="btn btn-primary" onclick="renderIncome()">🔍 조회</button>
+        <button class="btn btn-secondary" onclick="resetIncomeFilter()">초기화</button>
+      </div>
+
+      <div class="ie-summary">
+        <div class="ie-card income">
+          <div class="ie-label">📈 수입금액</div>
+          <div class="ie-amount" id="ie-income">₩0</div>
+          <div class="sub">완료 건수 × 결과유형별 수수료</div>
+        </div>
+        <div class="ie-card expense">
+          <div class="ie-label">📉 지출금액</div>
+          <div class="ie-amount" id="ie-expense">₩0</div>
+          <div class="sub">지출관리 입력 금액 합계</div>
+        </div>
+        <div class="ie-card profit">
+          <div class="ie-label">💹 차액</div>
+          <div class="ie-amount" id="ie-profit">₩0</div>
+          <div class="sub">수입금액 - 지출금액</div>
+        </div>
+      </div>
+
+      <div class="card-grid-2">
+        <div class="chart-wrap">
+          <div class="chart-title">결과유형별 수입 현황</div>
+          <div class="chart-container"><canvas id="income-type-chart"></canvas></div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">월별 수입/지출 추이</div>
+          <div class="chart-container"><canvas id="income-monthly-chart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <span class="title">결과유형별 완료 건수 및 수입 상세</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>결과유형</th>
+                <th>수수료</th>
+                <th>완료건수</th>
+                <th>수입금액</th>
+              </tr>
+            </thead>
+            <tbody id="income-detail-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-unit">
+      <div class="page-header">
+        <div>
+          <h2>📄 유지보수 단가표 모음</h2>
+          <div class="subtitle">결과유형별 수수료와 전문가 지급 수수료를 수정합니다.</div>
+        </div>
+        <button class="btn btn-success" onclick="saveFees()">💾 저장</button>
+      </div>
+
+      <div class="card-grid-2">
+        <div class="card">
+          <div class="card-title">
+            유지보수 유형별 수수료 표
+            <button class="btn btn-sm btn-secondary" onclick="addFeeRow()">+ 행 추가</button>
+          </div>
+          <div class="table-scroll">
+            <table class="editable-table">
+              <thead>
+                <tr>
+                  <th>결과유형</th>
+                  <th>수수료(₩)</th>
+                  <th>삭제</th>
+                </tr>
+              </thead>
+              <tbody id="income-fee-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            유지보수 유형별 전문가 지급 수수료 표
+          </div>
+          <div class="table-scroll">
+            <table class="editable-table">
+              <thead>
+                <tr>
+                  <th>결과유형</th>
+                  <th>전문가 지급 수수료(₩)</th>
+                  <th>삭제</th>
+                </tr>
+              </thead>
+              <tbody id="expert-fee-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="notice">
+        결과유형은 엑셀의 H열 “결과유형” 기준입니다. 단가가 0원인 유형은 수입 계산에서 0원으로 집계됩니다.
+      </div>
+    </div>
+
+    <div class="page" id="page-expense">
+      <div class="page-header">
+        <div>
+          <h2>📊 지출관리</h2>
+          <div class="subtitle">월별 지출과 작업자별 인건비를 직접 입력합니다.</div>
+        </div>
+        <div class="header-actions">
+          <select id="expense-year" class="select-like" onchange="renderExpense()"></select>
+          <button class="btn btn-success" onclick="saveExpenses()">💾 저장</button>
+        </div>
+      </div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchExpenseTab('monthly', this)">📅 월 지출 현황</button>
+        <button class="tab-btn" onclick="switchExpenseTab('worker', this)">👷 작업자별 인건비 지급 현황</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-monthly">
+        <div class="expense-month-grid" id="expense-grid"></div>
+        <div class="chart-wrap">
+          <div class="chart-title">항목별 월 지출 현황</div>
+          <div class="chart-container tall"><canvas id="expense-chart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-worker">
+        <div class="worker-toolbar">
+          <div class="table-title">작업자별 인건비 지급 현황</div>
+          <button class="btn btn-primary btn-sm" onclick="openWorkerModal()">+ 작업자 추가</button>
+        </div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>작업자명</th>
+                  <th>1월</th><th>2월</th><th>3월</th><th>4월</th><th>5월</th><th>6월</th>
+                  <th>7월</th><th>8월</th><th>9월</th><th>10월</th><th>11월</th><th>12월</th>
+                  <th>합계</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="worker-wage-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal-overlay" id="work-modal">
+    <div class="modal">
+      <div class="modal-title">
+        <span id="work-modal-title">작업 추가</span>
+        <button onclick="closeModal('work-modal')">✕</button>
+      </div>
+      <div class="form-row">
+        <label>유지보수 No *</label>
+        <input type="text" id="m-maintenance-no" maxlength="12" placeholder="12자리 숫자">
+      </div>
+      <div class="form-row">
+        <label>상태 *</label>
+        <select id="m-status">
+          <option>신청</option>
+          <option>보완 요청</option>
+          <option>완료</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>요청일</label>
+        <input type="date" id="m-request-date">
+      </div>
+      <div class="form-row">
+        <label>긴급처리 요구일자</label>
+        <input type="date" id="m-urgent-due-date">
+      </div>
+      <div class="form-row">
+        <label>완료일</label>
+        <input type="date" id="m-complete-date">
+      </div>
+      <div class="form-row">
+        <label>지역분류</label>
+        <select id="m-region"></select>
+      </div>
+      <div class="form-row">
+        <label>담당자</label>
+        <input type="text" id="m-manager" placeholder="담당자명">
+      </div>
+      <div class="form-row">
+        <label>결과유형</label>
+        <input type="text" id="m-result-type" placeholder="엑셀 H열 결과유형">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('work-modal')">취소</button>
+        <button class="btn btn-primary" onclick="saveWork()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="worker-modal">
+    <div class="modal small">
+      <div class="modal-title">
+        <span>작업자 추가</span>
+        <button onclick="closeModal('worker-modal')">✕</button>
+      </div>
+      <div class="form-row">
+        <label>작업자명 *</label>
+        <input type="text" id="new-worker-name" placeholder="담당자명">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('worker-modal')">취소</button>
+        <button class="btn btn-primary" onclick="saveNewWorker()">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
