@@ -1070,3 +1070,7 @@ function escapeHtml(v) {
 function escapeJs(v) {
   return String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
+
+function saveExpenses() {
+  return saveExpense();
+}
