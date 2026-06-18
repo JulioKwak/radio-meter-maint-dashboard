@@ -411,7 +411,7 @@ function normalizeMaintenanceNo(v) {
   return String(v ?? "").replace(/[^0-9]/g, "").trim();
 }
 
-function normalizeStatus(value) {
+function normalizeStatus(v) {
   const raw = String(value ?? "").trim();
   const compact = raw.replace(/\s+/g, "");
 
