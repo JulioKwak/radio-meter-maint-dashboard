@@ -402,7 +402,7 @@ async function handleExcelUpload(e) {
     const targetNos = new Set([...(preview.insertNos || []), ...(preview.updateNos || [])]);
     const rowsToSave = parsed.jobs.filter(row => targetNos.has(row.maintenanceNo));
 
-    const BATCH_SIZE = 1000;
+    const BATCH_SIZE = 100;
     let inserted = 0;
     let updated = 0;
     let invalid = [];
