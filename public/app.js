@@ -48,7 +48,7 @@ function fillYearSelect() {
   const select = document.getElementById("expense-year");
   const y = new Date().getFullYear();
   select.innerHTML = "";
-  for (let year = 2025; year <= y + 1; year++) {
+  for (let year = 2024; year <= y + 10; year++) {
     const opt = document.createElement("option");
     opt.value = String(year);
     opt.textContent = `${year}년`;
@@ -89,6 +89,26 @@ async function apiFetch(url, options = {}) {
     throw new Error(msg);
   }
   return body;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function apiFetchWithRetry(url, options = {}, retryCount = 3) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    try {
+      return await apiFetch(url, options);
+    } catch (err) {
+      lastError = err;
+      if (attempt >= retryCount) break;
+      await sleep(800 * attempt);
+    }
+  }
+
+  throw lastError;
 }
 
 async function loadJobs() {
@@ -331,7 +351,7 @@ async function handleExcelUpload(e) {
     const parsed = parseExcelRows(rows);
 
     if (parsed.invalid.length) {
-      console.warn("Invalid rows", parsed.invalid);
+      console.warn("Client invalid rows", parsed.invalid);
     }
 
     if (!parsed.jobs.length) {
@@ -339,51 +359,85 @@ async function handleExcelUpload(e) {
       return;
     }
 
-    const message =
-      `${parsed.jobs.length.toLocaleString()}건을 업로드합니다.\n` +
-      `유지보수 No가 이미 있으면 업데이트하고, 없으면 신규 추가합니다.\n` +
-      `서버 제한 방지를 위해 200건씩 나누어 업로드합니다.\n` +
-      (parsed.invalid.length ? `\n제외된 행: ${parsed.invalid.length}건` : "");
+    showToast("엑셀 데이터 검토 중입니다...");
 
-    if (!confirm(message)) return;
+    const preview = await apiFetchWithRetry("/api/jobs/preview", {
+      method: "POST",
+      body: JSON.stringify({ rows: parsed.jobs })
+    }, 3);
 
-    const BATCH_SIZE = 200;
+    const clientInvalidCount = parsed.invalid.length;
+    const serverInvalidCount = Number(preview.invalidCount || 0);
+    const invalidTotal = clientInvalidCount + serverInvalidCount;
+    const insertCount = Number(preview.insertCount || 0);
+    const updateCount = Number(preview.updateCount || 0);
+    const sameCount = Number(preview.sameCount || 0);
+    const toSaveCount = Number(preview.toSaveCount || 0);
+
+    if (preview.invalid?.length) {
+      console.warn("Server invalid rows", preview.invalid);
+    }
+    if (preview.updateSamples?.length) {
+      console.warn("Update samples", preview.updateSamples);
+    }
+
+    const summary =
+      `엑셀 검토 결과\n\n` +
+      `엑셀 정상 행: ${parsed.jobs.length.toLocaleString()}건\n` +
+      `신규 추가: ${insertCount.toLocaleString()}건\n` +
+      `수정 예정: ${updateCount.toLocaleString()}건\n` +
+      `변경 없음: ${sameCount.toLocaleString()}건\n` +
+      `오류 제외: ${invalidTotal.toLocaleString()}건\n\n` +
+      `저장 대상: ${toSaveCount.toLocaleString()}건\n\n` +
+      (invalidTotal ? `오류 상세는 브라우저 콘솔에 표시됩니다.\n\n` : "") +
+      `신규/수정 건만 저장하시겠습니까?`;
+
+    if (!toSaveCount) {
+      alert(summary.replace("신규/수정 건만 저장하시겠습니까?", "저장할 신규/수정 데이터가 없습니다."));
+      return;
+    }
+
+    if (!confirm(summary)) return;
+
+    const targetNos = new Set([...(preview.insertNos || []), ...(preview.updateNos || [])]);
+    const rowsToSave = parsed.jobs.filter(row => targetNos.has(row.maintenanceNo));
+
+    const BATCH_SIZE = 1000;
     let inserted = 0;
     let updated = 0;
     let invalid = [];
 
-    for (let i = 0; i < parsed.jobs.length; i += BATCH_SIZE) {
-      const batch = parsed.jobs.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < rowsToSave.length; i += BATCH_SIZE) {
+      const batch = rowsToSave.slice(i, i + BATCH_SIZE);
       const batchNo = Math.floor(i / BATCH_SIZE) + 1;
-      const totalBatch = Math.ceil(parsed.jobs.length / BATCH_SIZE);
+      const totalBatch = Math.ceil(rowsToSave.length / BATCH_SIZE);
 
-      showToast(`업로드 중... ${batchNo}/${totalBatch} (${i + batch.length}/${parsed.jobs.length}건)`);
+      showToast(`저장 중... ${batchNo}/${totalBatch} (${i + batch.length}/${rowsToSave.length}건)`);
 
-      const result = await apiFetch("/api/jobs/import", {
+      const result = await apiFetchWithRetry("/api/jobs/import", {
         method: "POST",
         body: JSON.stringify({ rows: batch })
-      });
+      }, 3);
 
       inserted += Number(result.inserted || 0);
       updated += Number(result.updated || 0);
 
       if (Array.isArray(result.invalid)) {
-        invalid = invalid.concat(result.invalid.map(item => ({
-          ...item,
-          batch: batchNo
-        })));
+        invalid = invalid.concat(result.invalid.map(item => ({ ...item, batch: batchNo })));
       }
+
+      await sleep(300);
+    }
+
+    if (invalid.length) {
+      console.warn("Save invalid rows", invalid);
     }
 
     await reloadAll();
     syncFeeRowsWithJobs();
 
-    if (invalid.length) {
-      console.warn("Upload invalid rows", invalid);
-    }
-
     showToast(
-      `업로드 완료: 신규 ${inserted.toLocaleString()}건, 업데이트 ${updated.toLocaleString()}건` +
+      `저장 완료: 신규 ${inserted.toLocaleString()}건, 수정 ${updated.toLocaleString()}건` +
       (invalid.length ? `, 제외 ${invalid.length.toLocaleString()}건` : "")
     );
   } catch (err) {
