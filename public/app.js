@@ -48,7 +48,7 @@ function fillYearSelect() {
   const select = document.getElementById("expense-year");
   const y = new Date().getFullYear();
   select.innerHTML = "";
-  for (let year = y - 2; year <= y + 1; year++) {
+  for (let year = 2025; year <= y + 1; year++) {
     const opt = document.createElement("option");
     opt.value = String(year);
     opt.textContent = `${year}년`;
