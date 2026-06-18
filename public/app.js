@@ -342,18 +342,50 @@ async function handleExcelUpload(e) {
     const message =
       `${parsed.jobs.length.toLocaleString()}건을 업로드합니다.\n` +
       `유지보수 No가 이미 있으면 업데이트하고, 없으면 신규 추가합니다.\n` +
+      `서버 제한 방지를 위해 200건씩 나누어 업로드합니다.\n` +
       (parsed.invalid.length ? `\n제외된 행: ${parsed.invalid.length}건` : "");
 
     if (!confirm(message)) return;
 
-    const result = await apiFetch("/api/jobs/import", {
-      method: "POST",
-      body: JSON.stringify({ rows: parsed.jobs })
-    });
+    const BATCH_SIZE = 200;
+    let inserted = 0;
+    let updated = 0;
+    let invalid = [];
+
+    for (let i = 0; i < parsed.jobs.length; i += BATCH_SIZE) {
+      const batch = parsed.jobs.slice(i, i + BATCH_SIZE);
+      const batchNo = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatch = Math.ceil(parsed.jobs.length / BATCH_SIZE);
+
+      showToast(`업로드 중... ${batchNo}/${totalBatch} (${i + batch.length}/${parsed.jobs.length}건)`);
+
+      const result = await apiFetch("/api/jobs/import", {
+        method: "POST",
+        body: JSON.stringify({ rows: batch })
+      });
+
+      inserted += Number(result.inserted || 0);
+      updated += Number(result.updated || 0);
+
+      if (Array.isArray(result.invalid)) {
+        invalid = invalid.concat(result.invalid.map(item => ({
+          ...item,
+          batch: batchNo
+        })));
+      }
+    }
 
     await reloadAll();
     syncFeeRowsWithJobs();
-    showToast(`업로드 완료: 신규 ${result.inserted}건, 업데이트 ${result.updated}건`);
+
+    if (invalid.length) {
+      console.warn("Upload invalid rows", invalid);
+    }
+
+    showToast(
+      `업로드 완료: 신규 ${inserted.toLocaleString()}건, 업데이트 ${updated.toLocaleString()}건` +
+      (invalid.length ? `, 제외 ${invalid.length.toLocaleString()}건` : "")
+    );
   } catch (err) {
     console.error(err);
     showToast("엑셀 업로드 실패: " + err.message, true);
