@@ -5,7 +5,7 @@ const REGIONS = [
   "전라북도", "제주특별자치도"
 ];
 
-const EXPENSE_ITEMS = ["인건비", "차량렌탈비", "차량유지비", "성과급", "자재비"];
+const EXPENSE_ITEMS = ["인건비", "전문가 수수료", "차량렌탈비", "차량유지비", "성과급", "자재비"];
 const PAGE_SIZE = 20;
 
 let app = {
@@ -13,8 +13,7 @@ let app = {
   filteredJobs: [],
   fees: [],
   expenses: {
-    monthlyExpenses: {},
-    workerWages: {}
+    monthlyExpenses: {}
   },
   currentPage: 1,
   editingMaintenanceNo: null,
@@ -33,6 +32,7 @@ async function init() {
   fillYearSelect();
   bindExcelUpload();
   bindModalClose();
+  setDefaultDateFilters();
   await reloadAll();
 }
 
@@ -105,8 +105,7 @@ async function loadFees() {
 async function loadExpenses() {
   const data = await apiFetch("/api/expenses");
   app.expenses = {
-    monthlyExpenses: data.monthlyExpenses || {},
-    workerWages: data.workerWages || {}
+    monthlyExpenses: data.monthlyExpenses || {}
   };
 }
 
@@ -124,7 +123,14 @@ function showPage(id) {
   document.getElementById("page-" + id).classList.add("active");
   document.getElementById("nav-" + id).classList.add("active");
 
-  if (id === "income") setTimeout(renderIncome, 100);
+  if (id === "work") {
+    ensureWorkDateDefaults();
+    setTimeout(() => applyWorkFilter(false), 100);
+  }
+  if (id === "income") {
+    ensureIncomeDateDefaults();
+    setTimeout(renderIncome, 100);
+  }
   if (id === "expense") setTimeout(() => { renderExpense(); renderExpenseChart(); }, 100);
 }
 
@@ -137,25 +143,21 @@ function renderManagerOptions() {
 }
 
 function applyWorkFilter(showMessage = true) {
+  ensureWorkDateDefaults();
+
+  const dateField = document.getElementById("f-date-field").value || "requestDate";
+  const startDate = document.getElementById("f-date-start").value;
+  const endDate = document.getElementById("f-date-end").value;
   const fs = {
-    requestStart: document.getElementById("f-request-start").value,
-    requestEnd: document.getElementById("f-request-end").value,
-    completeStart: document.getElementById("f-complete-start").value,
-    completeEnd: document.getElementById("f-complete-end").value,
-    dueStart: document.getElementById("f-due-start").value,
-    dueEnd: document.getElementById("f-due-end").value,
     manager: document.getElementById("f-manager").value,
     region: document.getElementById("f-region").value,
     status: document.getElementById("f-status").value
   };
 
   app.filteredJobs = app.jobs.filter(j => {
-    if (fs.requestStart && compareDate(j.requestDate, fs.requestStart) < 0) return false;
-    if (fs.requestEnd && compareDate(j.requestDate, fs.requestEnd) > 0) return false;
-    if (fs.completeStart && compareDate(j.completeDate, fs.completeStart) < 0) return false;
-    if (fs.completeEnd && compareDate(j.completeDate, fs.completeEnd) > 0) return false;
-    if (fs.dueStart && compareDate(j.urgentDueDate, fs.dueStart) < 0) return false;
-    if (fs.dueEnd && compareDate(j.urgentDueDate, fs.dueEnd) > 0) return false;
+    const targetDate = j[dateField] || "";
+    if (startDate && compareDate(targetDate, startDate) < 0) return false;
+    if (endDate && compareDate(targetDate, endDate) > 0) return false;
     if (fs.manager && j.manager !== fs.manager) return false;
     if (fs.region && j.region !== fs.region) return false;
     if (fs.status && j.status !== fs.status) return false;
@@ -168,10 +170,8 @@ function applyWorkFilter(showMessage = true) {
 }
 
 function resetWorkFilter() {
-  [
-    "f-request-start", "f-request-end", "f-complete-start", "f-complete-end",
-    "f-due-start", "f-due-end"
-  ].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("f-date-field").value = "requestDate";
+  setDateRangeInputs("f-date-start", "f-date-end");
   ["f-manager", "f-region", "f-status"].forEach(id => document.getElementById(id).value = "");
   applyWorkFilter(false);
 }
@@ -453,12 +453,52 @@ function compareDate(a, b) {
   return String(a).localeCompare(String(b));
 }
 
+function formatDateLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function currentMonthRange() {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  return {
+    start: formatDateLocal(first),
+    end: formatDateLocal(now)
+  };
+}
+
+function setDateRangeInputs(startId, endId) {
+  const range = currentMonthRange();
+  document.getElementById(startId).value = range.start;
+  document.getElementById(endId).value = range.end;
+}
+
+function setDefaultDateFilters() {
+  document.getElementById("f-date-field").value = "requestDate";
+  setDateRangeInputs("f-date-start", "f-date-end");
+  setDateRangeInputs("ie-start", "ie-end");
+}
+
+function ensureWorkDateDefaults() {
+  if (!document.getElementById("f-date-start").value || !document.getElementById("f-date-end").value) {
+    setDateRangeInputs("f-date-start", "f-date-end");
+  }
+}
+
+function ensureIncomeDateDefaults() {
+  if (!document.getElementById("ie-start").value || !document.getElementById("ie-end").value) {
+    setDateRangeInputs("ie-start", "ie-end");
+  }
+}
+
 function syncFeeRowsWithJobs() {
   const resultTypes = [...new Set(app.jobs.map(j => j.resultType).filter(Boolean))];
   let changed = false;
   resultTypes.forEach(rt => {
     if (!app.fees.some(f => f.resultType === rt)) {
-      app.fees.push({ resultType: rt, incomeFee: 0, expertFee: 0 });
+      app.fees.push({ resultType: rt, incomeFee: 0 });
       changed = true;
     }
   });
@@ -467,11 +507,9 @@ function syncFeeRowsWithJobs() {
 
 function renderFees() {
   const incomeTbody = document.getElementById("income-fee-tbody");
-  const expertTbody = document.getElementById("expert-fee-tbody");
 
   if (!app.fees.length) {
     incomeTbody.innerHTML = `<tr><td colspan="3" class="muted">단가표 데이터가 없습니다.</td></tr>`;
-    expertTbody.innerHTML = `<tr><td colspan="3" class="muted">단가표 데이터가 없습니다.</td></tr>`;
     return;
   }
 
@@ -482,18 +520,10 @@ function renderFees() {
       <td style="text-align:center"><button class="btn btn-sm btn-danger" onclick="removeFeeRow(${i})">삭제</button></td>
     </tr>
   `).join("");
-
-  expertTbody.innerHTML = app.fees.map((f, i) => `
-    <tr>
-      <td><input value="${escapeHtml(f.resultType || "")}" onchange="updateFee(${i}, 'resultType', this.value)"></td>
-      <td><input type="number" value="${Number(f.expertFee || 0)}" onchange="updateFee(${i}, 'expertFee', this.value)"></td>
-      <td style="text-align:center"><button class="btn btn-sm btn-danger" onclick="removeFeeRow(${i})">삭제</button></td>
-    </tr>
-  `).join("");
 }
 
 function updateFee(idx, field, value) {
-  if (field === "incomeFee" || field === "expertFee") {
+  if (field === "incomeFee") {
     app.fees[idx][field] = Number(value) || 0;
   } else {
     app.fees[idx][field] = String(value).trim();
@@ -501,7 +531,7 @@ function updateFee(idx, field, value) {
 }
 
 function addFeeRow() {
-  app.fees.push({ resultType: "새 유형", incomeFee: 0, expertFee: 0 });
+  app.fees.push({ resultType: "새 유형", incomeFee: 0 });
   renderFees();
 }
 
@@ -516,8 +546,7 @@ async function saveFees() {
   const fees = app.fees
     .map(f => ({
       resultType: String(f.resultType || "").trim(),
-      incomeFee: Number(f.incomeFee) || 0,
-      expertFee: Number(f.expertFee) || 0
+      incomeFee: Number(f.incomeFee) || 0
     }))
     .filter(f => f.resultType)
     .filter(f => {
@@ -538,20 +567,15 @@ async function saveFees() {
 }
 
 function getIncomeDateRange() {
-  let start = document.getElementById("ie-start").value;
-  let end = document.getElementById("ie-end").value;
-  if (!start) {
-    const d = new Date();
-    d.setDate(1);
-    start = d.toISOString().slice(0, 10);
-  }
-  if (!end) end = new Date().toISOString().slice(0, 10);
-  return { start, end };
+  ensureIncomeDateDefaults();
+  return {
+    start: document.getElementById("ie-start").value,
+    end: document.getElementById("ie-end").value
+  };
 }
 
 function resetIncomeFilter() {
-  document.getElementById("ie-start").value = "";
-  document.getElementById("ie-end").value = "";
+  setDateRangeInputs("ie-start", "ie-end");
   renderIncome();
 }
 
@@ -559,8 +583,7 @@ function feeMap() {
   const map = {};
   app.fees.forEach(f => {
     map[f.resultType] = {
-      incomeFee: Number(f.incomeFee) || 0,
-      expertFee: Number(f.expertFee) || 0
+      incomeFee: Number(f.incomeFee) || 0
     };
   });
   return map;
@@ -577,8 +600,8 @@ function calculateIncome(start, end) {
     if (end && compareDate(j.completeDate, end) > 0) return;
 
     const type = j.resultType || "미분류";
-    const fee = Number(j.appliedIncomeFee || 0) || Number(map[type]?.incomeFee || 0);
-    if (!byType[type]) byType[type] = { count: 0, fee: Number(map[type]?.incomeFee || 0), amount: 0 };
+    const fee = Number(map[type]?.incomeFee || 0);
+    if (!byType[type]) byType[type] = { count: 0, fee, amount: 0 };
     byType[type].count += 1;
     byType[type].amount += fee;
     total += fee;
@@ -590,20 +613,10 @@ function calculateIncome(start, end) {
 function calculateExpense(start, end) {
   let total = 0;
   const monthly = app.expenses.monthlyExpenses || {};
-  const wages = app.expenses.workerWages || {};
 
   for (const [monthKey, items] of Object.entries(monthly)) {
-    const d = monthKey + "-15";
-    if (start && compareDate(d, start) < 0) continue;
-    if (end && compareDate(d, end) > 0) continue;
+    if (!monthOverlapsRange(monthKey, start, end)) continue;
     EXPENSE_ITEMS.forEach(item => total += Number(items[item]) || 0);
-  }
-
-  for (const [monthKey, workers] of Object.entries(wages)) {
-    const d = monthKey + "-15";
-    if (start && compareDate(d, start) < 0) continue;
-    if (end && compareDate(d, end) > 0) continue;
-    Object.values(workers).forEach(v => total += Number(v) || 0);
   }
 
   return total;
@@ -657,12 +670,14 @@ function renderIncomeCharts(byType) {
     }
   });
 
-  const months = recentMonths(6);
+  const { start, end } = getIncomeDateRange();
+  const months = monthsInRange(start, end);
   const incomeData = months.map(m => {
-    const { total } = calculateIncome(`${m}-01`, `${m}-31`);
+    const range = clipMonthRange(m, start, end);
+    const { total } = calculateIncome(range.start, range.end);
     return total;
   });
-  const expenseData = months.map(m => calculateExpense(`${m}-01`, `${m}-31`));
+  const expenseData = months.map(m => calculateExpense(`${m}-01`, lastDayOfMonth(m)));
 
   const ctx2 = document.getElementById("income-monthly-chart");
   if (app.incomeMonthlyChart) app.incomeMonthlyChart.destroy();
@@ -683,16 +698,49 @@ function renderIncomeCharts(byType) {
   });
 }
 
-function recentMonths(count) {
+function monthsInRange(start, end) {
   const arr = [];
-  const base = new Date();
-  base.setDate(1);
-  for (let i = count - 1; i >= 0; i--) {
-    const d = new Date(base);
-    d.setMonth(d.getMonth() - i);
-    arr.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  if (!start || !end) return arr;
+
+  const [sy, sm] = start.split("-").map(Number);
+  const [ey, em] = end.split("-").map(Number);
+  let y = sy;
+  let m = sm;
+
+  while (y < ey || (y === ey && m <= em)) {
+    arr.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    if (arr.length > 120) break;
   }
+
   return arr;
+}
+
+function lastDayOfMonth(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const d = new Date(y, m, 0);
+  return formatDateLocal(d);
+}
+
+function clipMonthRange(monthKey, rangeStart, rangeEnd) {
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = lastDayOfMonth(monthKey);
+  return {
+    start: compareDate(monthStart, rangeStart) < 0 ? rangeStart : monthStart,
+    end: compareDate(monthEnd, rangeEnd) > 0 ? rangeEnd : monthEnd
+  };
+}
+
+function monthOverlapsRange(monthKey, rangeStart, rangeEnd) {
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = lastDayOfMonth(monthKey);
+  if (rangeStart && compareDate(monthEnd, rangeStart) < 0) return false;
+  if (rangeEnd && compareDate(monthStart, rangeEnd) > 0) return false;
+  return true;
 }
 
 function renderExpense() {
@@ -726,7 +774,6 @@ function renderExpense() {
     grid.appendChild(card);
   }
 
-  renderWorkerWages();
   renderExpenseChart();
 }
 
@@ -738,103 +785,6 @@ function updateMonthlyExpense(monthKey, item, value) {
   const total = EXPENSE_ITEMS.reduce((sum, name) => sum + (Number(items[name]) || 0), 0);
   const el = document.getElementById(`expense-total-${monthKey}`);
   if (el) el.innerHTML = `<span>합계</span><span>${won(total)}</span>`;
-}
-
-function renderWorkerWages() {
-  const year = document.getElementById("expense-year").value;
-  const tbody = document.getElementById("worker-wage-tbody");
-  const workers = workerNames();
-
-  if (!workers.length) {
-    tbody.innerHTML = `<tr><td colspan="15" class="muted">작업자 데이터가 없습니다.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = workers.map(worker => {
-    let total = 0;
-    const monthCells = Array.from({ length: 12 }, (_, i) => {
-      const monthKey = `${year}-${String(i + 1).padStart(2, "0")}`;
-      const value = Number(app.expenses.workerWages?.[monthKey]?.[worker]) || 0;
-      total += value;
-      return `<td><input class="inline-money" type="number" value="${value || ""}" placeholder="0"
-        onchange="updateWorkerWage('${monthKey}', '${escapeJs(worker)}', this.value)"></td>`;
-    }).join("");
-
-    return `<tr>
-      <td style="font-weight:600">${escapeHtml(worker)}</td>
-      ${monthCells}
-      <td style="text-align:right;font-weight:700">${won(total)}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="removeWorker('${escapeJs(worker)}')">삭제</button></td>
-    </tr>`;
-  }).join("");
-}
-
-function workerNames() {
-  const names = new Set();
-  app.jobs.forEach(j => { if (j.manager) names.add(j.manager); });
-  Object.values(app.expenses.workerWages || {}).forEach(workers => {
-    Object.keys(workers || {}).forEach(name => names.add(name));
-  });
-  return [...names].sort();
-}
-
-function updateWorkerWage(monthKey, worker, value) {
-  if (!app.expenses.workerWages[monthKey]) app.expenses.workerWages[monthKey] = {};
-  app.expenses.workerWages[monthKey][worker] = Number(value) || 0;
-}
-
-function openWorkerModal() {
-  document.getElementById("new-worker-name").value = "";
-  document.getElementById("worker-modal").classList.add("open");
-}
-
-function saveNewWorker() {
-  const name = document.getElementById("new-worker-name").value.trim();
-  if (!name) {
-    showToast("작업자명을 입력하세요.", true);
-    return;
-  }
-  const year = document.getElementById("expense-year").value;
-  const monthKey = `${year}-01`;
-  if (!app.expenses.workerWages[monthKey]) app.expenses.workerWages[monthKey] = {};
-  if (app.expenses.workerWages[monthKey][name] === undefined) {
-    app.expenses.workerWages[monthKey][name] = 0;
-  }
-  closeModal("worker-modal");
-  renderWorkerWages();
-}
-
-function removeWorker(worker) {
-  if (!confirm(`${worker} 작업자의 인건비 행을 삭제하시겠습니까?\n작업현황의 담당자명은 삭제되지 않습니다.`)) return;
-  Object.values(app.expenses.workerWages || {}).forEach(workers => {
-    if (workers && Object.prototype.hasOwnProperty.call(workers, worker)) {
-      delete workers[worker];
-    }
-  });
-  renderWorkerWages();
-}
-
-async function saveExpenses() {
-  try {
-    await apiFetch("/api/expenses", {
-      method: "POST",
-      body: JSON.stringify(app.expenses)
-    });
-    await loadExpenses();
-    renderExpense();
-    renderIncome();
-    showToast("지출 데이터가 저장되었습니다.");
-  } catch (err) {
-    showToast("지출 저장 실패: " + err.message, true);
-  }
-}
-
-function switchExpenseTab(tab, btn) {
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-  btn.classList.add("active");
-  document.getElementById("tab-" + tab).classList.add("active");
-  if (tab === "monthly") setTimeout(renderExpenseChart, 100);
 }
 
 function renderExpenseChart() {

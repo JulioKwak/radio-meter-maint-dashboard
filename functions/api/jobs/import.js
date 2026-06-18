@@ -1,5 +1,5 @@
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
+  return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" }
   });
@@ -17,7 +17,7 @@ function normalizeStatus(value) {
 }
 
 function normalizeNo(value) {
-  return String(value || "").replace(/[^0-9]/g, "").trim();
+  return String(value ?? "").replace(/[^0-9]/g, "").trim();
 }
 
 function normalizeDate(value) {
@@ -31,18 +31,16 @@ function normalizeDate(value) {
   return s;
 }
 
-async function getFees(env, resultType) {
-  if (!resultType) return { incomeFee: 0, expertFee: 0 };
+async function getIncomeFee(env, resultType) {
+  if (!resultType) return 0;
+
   const row = await env.DB.prepare(`
-    SELECT income_fee, expert_fee
+    SELECT income_fee
     FROM fee_rates
     WHERE result_type = ?
   `).bind(resultType).first();
 
-  return {
-    incomeFee: Number(row?.income_fee || 0),
-    expertFee: Number(row?.expert_fee || 0)
-  };
+  return Number(row?.income_fee || 0);
 }
 
 async function upsertOne(env, input) {
@@ -69,17 +67,14 @@ async function upsertOne(env, input) {
     WHERE maintenance_no = ?
   `).bind(maintenanceNo).first();
 
-  const fees = status === "완료"
-    ? await getFees(env, resultType)
-    : { incomeFee: 0, expertFee: 0 };
+  const incomeFee = status === "완료" ? await getIncomeFee(env, resultType) : 0;
 
   await env.DB.prepare(`
     INSERT INTO maintenance_jobs (
       maintenance_no, status, request_date, urgent_due_date, complete_date,
-      region, manager, result_type, applied_income_fee, applied_expert_fee,
-      created_at, updated_at
+      region, manager, result_type, applied_income_fee, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT(maintenance_no) DO UPDATE SET
       status = excluded.status,
       request_date = excluded.request_date,
@@ -89,11 +84,10 @@ async function upsertOne(env, input) {
       manager = excluded.manager,
       result_type = excluded.result_type,
       applied_income_fee = excluded.applied_income_fee,
-      applied_expert_fee = excluded.applied_expert_fee,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
     maintenanceNo, status, requestDate, urgentDueDate, completeDate,
-    region, manager, resultType, fees.incomeFee, fees.expertFee
+    region, manager, resultType, incomeFee
   ).run();
 
   return { ok: true, action: existed ? "updated" : "inserted", maintenanceNo };
@@ -126,13 +120,7 @@ export async function onRequestPost(context) {
       if (result.action === "updated") updated += 1;
     }
 
-    return json({
-      ok: true,
-      inserted,
-      updated,
-      invalid,
-      total: rows.length
-    });
+    return json({ ok: true, inserted, updated, invalid, total: rows.length });
   } catch (err) {
     return json({ error: err.message || "엑셀 업로드 처리 실패" }, 500);
   }

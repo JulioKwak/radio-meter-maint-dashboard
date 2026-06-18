@@ -73,28 +73,20 @@
 
       <div class="filter-bar">
         <div class="filter-group">
-          <label>신청일자 시작</label>
-          <input type="date" id="f-request-start">
+          <label>날짜 기준</label>
+          <select id="f-date-field">
+            <option value="requestDate">신청일자</option>
+            <option value="completeDate">완료일자</option>
+            <option value="urgentDueDate">처리기한일자</option>
+          </select>
         </div>
         <div class="filter-group">
-          <label>신청일자 종료</label>
-          <input type="date" id="f-request-end">
+          <label>시작일</label>
+          <input type="date" id="f-date-start">
         </div>
         <div class="filter-group">
-          <label>완료일자 시작</label>
-          <input type="date" id="f-complete-start">
-        </div>
-        <div class="filter-group">
-          <label>완료일자 종료</label>
-          <input type="date" id="f-complete-end">
-        </div>
-        <div class="filter-group">
-          <label>처리기한 시작</label>
-          <input type="date" id="f-due-start">
-        </div>
-        <div class="filter-group">
-          <label>처리기한 종료</label>
-          <input type="date" id="f-due-end">
+          <label>종료일</label>
+          <input type="date" id="f-date-end">
         </div>
         <div class="filter-group">
           <label>작업자</label>
@@ -222,12 +214,12 @@
       <div class="page-header">
         <div>
           <h2>📄 유지보수 단가표 모음</h2>
-          <div class="subtitle">결과유형별 수수료와 전문가 지급 수수료를 수정합니다.</div>
+          <div class="subtitle">결과유형별 수수료를 수정합니다.</div>
         </div>
         <button class="btn btn-success" onclick="saveFees()">💾 저장</button>
       </div>
 
-      <div class="card-grid-2">
+      <div class="card-grid-1">
         <div class="card">
           <div class="card-title">
             유지보수 유형별 수수료 표
@@ -246,24 +238,6 @@
             </table>
           </div>
         </div>
-
-        <div class="card">
-          <div class="card-title">
-            유지보수 유형별 전문가 지급 수수료 표
-          </div>
-          <div class="table-scroll">
-            <table class="editable-table">
-              <thead>
-                <tr>
-                  <th>결과유형</th>
-                  <th>전문가 지급 수수료(₩)</th>
-                  <th>삭제</th>
-                </tr>
-              </thead>
-              <tbody id="expert-fee-tbody"></tbody>
-            </table>
-          </div>
-        </div>
       </div>
       <div class="notice">
         결과유형은 엑셀의 H열 “결과유형” 기준입니다. 단가가 0원인 유형은 수입 계산에서 0원으로 집계됩니다.
@@ -274,7 +248,7 @@
       <div class="page-header">
         <div>
           <h2>📊 지출관리</h2>
-          <div class="subtitle">월별 지출과 작업자별 인건비를 직접 입력합니다.</div>
+          <div class="subtitle">월별 지출 항목을 직접 입력합니다.</div>
         </div>
         <div class="header-actions">
           <select id="expense-year" class="select-like" onchange="renderExpense()"></select>
@@ -282,40 +256,10 @@
         </div>
       </div>
 
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchExpenseTab('monthly', this)">📅 월 지출 현황</button>
-        <button class="tab-btn" onclick="switchExpenseTab('worker', this)">👷 작업자별 인건비 지급 현황</button>
-      </div>
-
-      <div class="tab-panel active" id="tab-monthly">
-        <div class="expense-month-grid" id="expense-grid"></div>
-        <div class="chart-wrap">
-          <div class="chart-title">항목별 월 지출 현황</div>
-          <div class="chart-container tall"><canvas id="expense-chart"></canvas></div>
-        </div>
-      </div>
-
-      <div class="tab-panel" id="tab-worker">
-        <div class="worker-toolbar">
-          <div class="table-title">작업자별 인건비 지급 현황</div>
-          <button class="btn btn-primary btn-sm" onclick="openWorkerModal()">+ 작업자 추가</button>
-        </div>
-        <div class="table-wrap">
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>작업자명</th>
-                  <th>1월</th><th>2월</th><th>3월</th><th>4월</th><th>5월</th><th>6월</th>
-                  <th>7월</th><th>8월</th><th>9월</th><th>10월</th><th>11월</th><th>12월</th>
-                  <th>합계</th>
-                  <th>관리</th>
-                </tr>
-              </thead>
-              <tbody id="worker-wage-tbody"></tbody>
-            </table>
-          </div>
-        </div>
+      <div class="expense-month-grid" id="expense-grid"></div>
+      <div class="chart-wrap">
+        <div class="chart-title">항목별 월 지출 현황</div>
+        <div class="chart-container tall"><canvas id="expense-chart"></canvas></div>
       </div>
     </div>
   </main>
@@ -365,23 +309,6 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('work-modal')">취소</button>
         <button class="btn btn-primary" onclick="saveWork()">저장</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="worker-modal">
-    <div class="modal small">
-      <div class="modal-title">
-        <span>작업자 추가</span>
-        <button onclick="closeModal('worker-modal')">✕</button>
-      </div>
-      <div class="form-row">
-        <label>작업자명 *</label>
-        <input type="text" id="new-worker-name" placeholder="담당자명">
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('worker-modal')">취소</button>
-        <button class="btn btn-primary" onclick="saveNewWorker()">추가</button>
       </div>
     </div>
   </div>

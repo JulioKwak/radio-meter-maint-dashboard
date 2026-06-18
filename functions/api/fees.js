@@ -1,5 +1,5 @@
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
+  return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" }
   });
@@ -9,19 +9,22 @@ function toApiFee(row) {
   return {
     resultType: row.result_type,
     incomeFee: row.income_fee || 0,
-    expertFee: row.expert_fee || 0,
     updatedAt: row.updated_at
   };
 }
 
 export async function onRequestGet(context) {
-  const result = await context.env.DB.prepare(`
-    SELECT result_type, income_fee, expert_fee, updated_at
-    FROM fee_rates
-    ORDER BY result_type
-  `).all();
+  try {
+    const result = await context.env.DB.prepare(`
+      SELECT result_type, income_fee, updated_at
+      FROM fee_rates
+      ORDER BY result_type
+    `).all();
 
-  return json({ fees: (result.results || []).map(toApiFee) });
+    return json({ fees: (result.results || []).map(toApiFee) });
+  } catch (err) {
+    return json({ error: "단가표 조회 실패", message: err.message || String(err) }, 500);
+  }
 }
 
 export async function onRequestPost(context) {
@@ -36,17 +39,16 @@ export async function onRequestPost(context) {
       if (!resultType) continue;
 
       await context.env.DB.prepare(`
-        INSERT INTO fee_rates (result_type, income_fee, expert_fee, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO fee_rates (result_type, income_fee, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
       `).bind(
         resultType,
-        Number(f.incomeFee || f.income_fee || 0),
-        Number(f.expertFee || f.expert_fee || 0)
+        Number(f.incomeFee || f.income_fee || 0)
       ).run();
     }
 
     const result = await context.env.DB.prepare(`
-      SELECT result_type, income_fee, expert_fee, updated_at
+      SELECT result_type, income_fee, updated_at
       FROM fee_rates
       ORDER BY result_type
     `).all();

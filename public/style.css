@@ -403,6 +403,13 @@ tr:hover td { background: var(--gray-50); }
   margin-bottom: 16px;
 }
 
+.card-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
 .card, .chart-wrap {
   background: #fff;
   border-radius: var(--border-r);
@@ -672,7 +679,7 @@ tr:hover td { background: var(--gray-50); }
 @media (max-width: 900px) {
   aside { transform: translateX(-100%); }
   main { margin-left: 0; padding: 16px; }
-  .stat-grid.three, .card-grid-2, .ie-summary { grid-template-columns: 1fr; }
+  .stat-grid.three, .card-grid-2, .card-grid-1, .ie-summary { grid-template-columns: 1fr; }
   .page-header { align-items: flex-start; flex-direction: column; }
   header h1 { font-size: 13px; }
 }

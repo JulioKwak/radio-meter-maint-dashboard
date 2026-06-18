@@ -1,5 +1,5 @@
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
+  return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" }
   });
@@ -17,7 +17,7 @@ function normalizeStatus(value) {
 }
 
 function normalizeNo(value) {
-  return String(value || "").replace(/[^0-9]/g, "").trim();
+  return String(value ?? "").replace(/[^0-9]/g, "").trim();
 }
 
 function normalizeDate(value) {
@@ -42,24 +42,21 @@ function toApiJob(row) {
     manager: row.manager || "",
     resultType: row.result_type || "",
     appliedIncomeFee: row.applied_income_fee || 0,
-    appliedExpertFee: row.applied_expert_fee || 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
 }
 
-async function getFees(env, resultType) {
-  if (!resultType) return { incomeFee: 0, expertFee: 0 };
+async function getIncomeFee(env, resultType) {
+  if (!resultType) return 0;
+
   const row = await env.DB.prepare(`
-    SELECT income_fee, expert_fee
+    SELECT income_fee
     FROM fee_rates
     WHERE result_type = ?
   `).bind(resultType).first();
 
-  return {
-    incomeFee: Number(row?.income_fee || 0),
-    expertFee: Number(row?.expert_fee || 0)
-  };
+  return Number(row?.income_fee || 0);
 }
 
 async function upsertJob(env, input) {
@@ -69,24 +66,24 @@ async function upsertJob(env, input) {
   }
 
   const status = normalizeStatus(input.status);
+  if (!["신청", "보완 요청", "완료"].includes(status)) {
+    throw new Error("상태값은 신청, 보완 요청, 완료 중 하나여야 합니다.");
+  }
+
   const requestDate = normalizeDate(input.requestDate || input.request_date);
   const urgentDueDate = normalizeDate(input.urgentDueDate || input.urgent_due_date);
   const completeDate = normalizeDate(input.completeDate || input.complete_date);
   const region = String(input.region || "").trim();
   const manager = String(input.manager || "").trim();
   const resultType = String(input.resultType || input.result_type || "").trim();
-
-  const fees = status === "완료"
-    ? await getFees(env, resultType)
-    : { incomeFee: 0, expertFee: 0 };
+  const incomeFee = status === "완료" ? await getIncomeFee(env, resultType) : 0;
 
   await env.DB.prepare(`
     INSERT INTO maintenance_jobs (
       maintenance_no, status, request_date, urgent_due_date, complete_date,
-      region, manager, result_type, applied_income_fee, applied_expert_fee,
-      created_at, updated_at
+      region, manager, result_type, applied_income_fee, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT(maintenance_no) DO UPDATE SET
       status = excluded.status,
       request_date = excluded.request_date,
@@ -96,49 +93,52 @@ async function upsertJob(env, input) {
       manager = excluded.manager,
       result_type = excluded.result_type,
       applied_income_fee = excluded.applied_income_fee,
-      applied_expert_fee = excluded.applied_expert_fee,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
     maintenanceNo, status, requestDate, urgentDueDate, completeDate,
-    region, manager, resultType, fees.incomeFee, fees.expertFee
+    region, manager, resultType, incomeFee
   ).run();
 
   return { maintenanceNo };
 }
 
 export async function onRequestGet(context) {
-  const { searchParams } = new URL(context.request.url);
-  let sql = `
-    SELECT *
-    FROM maintenance_jobs
-    WHERE 1 = 1
-  `;
-  const params = [];
+  try {
+    const { searchParams } = new URL(context.request.url);
+    let sql = `
+      SELECT *
+      FROM maintenance_jobs
+      WHERE 1 = 1
+    `;
+    const params = [];
 
-  const requestStart = searchParams.get("requestStart");
-  const requestEnd = searchParams.get("requestEnd");
-  const completeStart = searchParams.get("completeStart");
-  const completeEnd = searchParams.get("completeEnd");
-  const dueStart = searchParams.get("dueStart");
-  const dueEnd = searchParams.get("dueEnd");
-  const manager = searchParams.get("manager");
-  const region = searchParams.get("region");
-  const status = searchParams.get("status");
+    const requestStart = searchParams.get("requestStart");
+    const requestEnd = searchParams.get("requestEnd");
+    const completeStart = searchParams.get("completeStart");
+    const completeEnd = searchParams.get("completeEnd");
+    const dueStart = searchParams.get("dueStart");
+    const dueEnd = searchParams.get("dueEnd");
+    const manager = searchParams.get("manager");
+    const region = searchParams.get("region");
+    const status = searchParams.get("status");
 
-  if (requestStart) { sql += " AND request_date >= ?"; params.push(requestStart); }
-  if (requestEnd) { sql += " AND request_date <= ?"; params.push(requestEnd); }
-  if (completeStart) { sql += " AND complete_date >= ?"; params.push(completeStart); }
-  if (completeEnd) { sql += " AND complete_date <= ?"; params.push(completeEnd); }
-  if (dueStart) { sql += " AND urgent_due_date >= ?"; params.push(dueStart); }
-  if (dueEnd) { sql += " AND urgent_due_date <= ?"; params.push(dueEnd); }
-  if (manager) { sql += " AND manager = ?"; params.push(manager); }
-  if (region) { sql += " AND region = ?"; params.push(region); }
-  if (status) { sql += " AND status = ?"; params.push(status); }
+    if (requestStart) { sql += " AND request_date >= ?"; params.push(requestStart); }
+    if (requestEnd) { sql += " AND request_date <= ?"; params.push(requestEnd); }
+    if (completeStart) { sql += " AND complete_date >= ?"; params.push(completeStart); }
+    if (completeEnd) { sql += " AND complete_date <= ?"; params.push(completeEnd); }
+    if (dueStart) { sql += " AND urgent_due_date >= ?"; params.push(dueStart); }
+    if (dueEnd) { sql += " AND urgent_due_date <= ?"; params.push(dueEnd); }
+    if (manager) { sql += " AND manager = ?"; params.push(manager); }
+    if (region) { sql += " AND region = ?"; params.push(region); }
+    if (status) { sql += " AND status = ?"; params.push(status); }
 
-  sql += " ORDER BY COALESCE(request_date, '') DESC, maintenance_no DESC LIMIT 20000";
+    sql += " ORDER BY COALESCE(request_date, '') DESC, maintenance_no DESC LIMIT 20000";
 
-  const result = await context.env.DB.prepare(sql).bind(...params).all();
-  return json({ jobs: (result.results || []).map(toApiJob) });
+    const result = await context.env.DB.prepare(sql).bind(...params).all();
+    return json({ jobs: (result.results || []).map(toApiJob) });
+  } catch (err) {
+    return json({ error: "작업현황 조회 실패", message: err.message || String(err) }, 500);
+  }
 }
 
 export async function onRequestPost(context) {

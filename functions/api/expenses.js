@@ -5,12 +5,11 @@ function json(data, status = 200) {
   });
 }
 
-const EXPENSE_ITEMS = ["인건비", "차량렌탈비", "차량유지비", "성과급", "자재비"];
+const EXPENSE_ITEMS = ["인건비", "전문가 수수료", "차량렌탈비", "차량유지비", "성과급", "자재비"];
 
 function parseMonthKey(monthKey) {
   const s = String(monthKey || "").trim();
   const match = s.match(/^(\d{4})-(\d{2})$/);
-
   if (!match) return null;
 
   return {
@@ -25,71 +24,32 @@ function makeMonthKey(year, month) {
 
 export async function onRequestGet(context) {
   try {
-    if (!context.env.DB) {
-      return json({
-        error: "D1 바인딩 DB가 없습니다."
-      }, 500);
-    }
-
     const monthlyRows = await context.env.DB.prepare(`
       SELECT expense_year, expense_month, category, amount
       FROM monthly_expenses
       ORDER BY expense_year, expense_month, category
     `).all();
 
-    const wageRows = await context.env.DB.prepare(`
-      SELECT expense_year, expense_month, worker_name, amount
-      FROM worker_wages
-      ORDER BY expense_year, expense_month, worker_name
-    `).all();
-
     const monthlyExpenses = {};
 
     for (const row of monthlyRows.results || []) {
       const monthKey = makeMonthKey(row.expense_year, row.expense_month);
-
       if (!monthlyExpenses[monthKey]) monthlyExpenses[monthKey] = {};
-
       monthlyExpenses[monthKey][row.category] = Number(row.amount || 0);
     }
 
-    const workerWages = {};
-
-    for (const row of wageRows.results || []) {
-      const monthKey = makeMonthKey(row.expense_year, row.expense_month);
-
-      if (!workerWages[monthKey]) workerWages[monthKey] = {};
-
-      workerWages[monthKey][row.worker_name] = Number(row.amount || 0);
-    }
-
-    return json({
-      monthlyExpenses,
-      workerWages
-    });
+    return json({ monthlyExpenses });
   } catch (err) {
-    return json({
-      error: "지출 데이터 조회 실패",
-      message: err.message || String(err)
-    }, 500);
+    return json({ error: "지출 데이터 조회 실패", message: err.message || String(err) }, 500);
   }
 }
 
 export async function onRequestPost(context) {
   try {
-    if (!context.env.DB) {
-      return json({
-        error: "D1 바인딩 DB가 없습니다."
-      }, 500);
-    }
-
     const body = await context.request.json();
-
     const monthlyExpenses = body.monthlyExpenses || {};
-    const workerWages = body.workerWages || {};
 
     await context.env.DB.prepare(`DELETE FROM monthly_expenses`).run();
-    await context.env.DB.prepare(`DELETE FROM worker_wages`).run();
 
     for (const [monthKey, items] of Object.entries(monthlyExpenses)) {
       const parsed = parseMonthKey(monthKey);
@@ -97,7 +57,6 @@ export async function onRequestPost(context) {
 
       for (const item of EXPENSE_ITEMS) {
         const amount = Number(items?.[item] || 0);
-
         if (!amount) continue;
 
         await context.env.DB.prepare(`
@@ -108,49 +67,12 @@ export async function onRequestPost(context) {
           ON CONFLICT(expense_year, expense_month, category) DO UPDATE SET
             amount = excluded.amount,
             updated_at = CURRENT_TIMESTAMP
-        `).bind(
-          parsed.year,
-          parsed.month,
-          item,
-          amount
-        ).run();
+        `).bind(parsed.year, parsed.month, item, amount).run();
       }
     }
 
-    for (const [monthKey, workers] of Object.entries(workerWages)) {
-      const parsed = parseMonthKey(monthKey);
-      if (!parsed) continue;
-
-      for (const [workerNameRaw, amountRaw] of Object.entries(workers || {})) {
-        const workerName = String(workerNameRaw || "").trim();
-        const amount = Number(amountRaw || 0);
-
-        if (!workerName || !amount) continue;
-
-        await context.env.DB.prepare(`
-          INSERT INTO worker_wages (
-            expense_year, expense_month, worker_name, amount, created_at, updated_at
-          )
-          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          ON CONFLICT(expense_year, expense_month, worker_name) DO UPDATE SET
-            amount = excluded.amount,
-            updated_at = CURRENT_TIMESTAMP
-        `).bind(
-          parsed.year,
-          parsed.month,
-          workerName,
-          amount
-        ).run();
-      }
-    }
-
-    return json({
-      ok: true
-    });
+    return json({ ok: true });
   } catch (err) {
-    return json({
-      error: "지출 데이터 저장 실패",
-      message: err.message || String(err)
-    }, 500);
+    return json({ error: "지출 데이터 저장 실패", message: err.message || String(err) }, 500);
   }
 }
