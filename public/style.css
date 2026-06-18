@@ -58,8 +58,8 @@ header .logo-icon {
 }
 
 header .logo-icon img {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   display: block;
 }
