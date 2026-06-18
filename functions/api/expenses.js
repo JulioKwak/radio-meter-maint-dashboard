@@ -5,7 +5,7 @@ function json(data, status = 200) {
   });
 }
 
-const EXPENSE_ITEMS = ["인건비", "전문가비", "차량렌탈비", "차량유지비", "성과급", "출장비", "자재비"];
+const EXPENSE_ITEMS = ["인건비", "전문가 수수료", "차량렌탈비", "차량유지비", "출장비", "성과급", "자재비"];
 
 function parseMonthKey(monthKey) {
   const s = String(monthKey || "").trim();

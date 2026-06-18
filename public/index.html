@@ -10,10 +10,8 @@
 </head>
 <body>
   <header>
-  <div class="logo-icon">
-    <img src="/logo.png" alt="로고">
-  </div>
-  <h1>무선국 원격검침시설 유지보수 자체사업 현황</h1>
+    <div class="logo-icon">📡</div>
+    <h1>무선국 원격검침시설 유지보수 자체사업 현황</h1>
     <span class="badge" id="current-date"></span>
   </header>
 
@@ -216,24 +214,28 @@
       <div class="page-header">
         <div>
           <h2>📄 유지보수 단가표 모음</h2>
-          <div class="subtitle">결과유형별 수수료를 수정합니다.</div>
+          <div class="subtitle">현재 적용 단가를 기본으로 보여주고, 결과유형별 이력은 필요할 때 확인합니다.</div>
         </div>
-        <button class="btn btn-success" onclick="saveFees()">💾 저장</button>
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="openNewRateModal()">+ 신규 단가 적용</button>
+          <button class="btn btn-success" onclick="saveFees()">💾 현재 단가 저장</button>
+        </div>
       </div>
 
       <div class="card-grid-1">
         <div class="card">
           <div class="card-title">
-            유지보수 유형별 수수료 표
-            <button class="btn btn-sm btn-secondary" onclick="addFeeRow()">+ 행 추가</button>
+            현재 적용 단가표
           </div>
           <div class="table-scroll">
             <table class="editable-table">
               <thead>
                 <tr>
                   <th>결과유형</th>
-                  <th>수수료(₩)</th>
-                  <th>삭제</th>
+                  <th>현재 수수료(₩)</th>
+                  <th>적용시작일</th>
+                  <th>적용종료일</th>
+                  <th>관리</th>
                 </tr>
               </thead>
               <tbody id="income-fee-tbody"></tbody>
@@ -242,7 +244,7 @@
         </div>
       </div>
       <div class="notice">
-        결과유형은 엑셀의 H열 “결과유형” 기준입니다. 단가가 0원인 유형은 수입 계산에서 0원으로 집계됩니다.
+        적용종료일이 비어 있는 단가가 현재 단가입니다. 수입금액은 완료일자를 기준으로 해당 기간의 단가가 적용됩니다.
       </div>
     </div>
 
@@ -311,6 +313,63 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('work-modal')">취소</button>
         <button class="btn btn-primary" onclick="saveWork()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="new-rate-modal">
+    <div class="modal wide">
+      <div class="modal-title">
+        <span>신규 단가 적용</span>
+        <button onclick="closeModal('new-rate-modal')">✕</button>
+      </div>
+      <div class="notice" style="margin-bottom:14px;">
+        신규 적용시작일을 입력하면 기존 현재 단가는 적용시작일 전날까지로 자동 종료됩니다.
+      </div>
+      <div class="form-row">
+        <label>신규 단가 적용시작일 *</label>
+        <input type="date" id="new-rate-valid-from">
+      </div>
+      <div class="table-scroll" style="max-height:420px;">
+        <table class="editable-table">
+          <thead>
+            <tr>
+              <th>결과유형</th>
+              <th>기존 수수료</th>
+              <th>신규 수수료</th>
+            </tr>
+          </thead>
+          <tbody id="new-rate-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('new-rate-modal')">취소</button>
+        <button class="btn btn-primary" onclick="saveNewRates()">신규 단가 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="fee-history-modal">
+    <div class="modal wide">
+      <div class="modal-title">
+        <span id="fee-history-title">단가 이력</span>
+        <button onclick="closeModal('fee-history-modal')">✕</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>적용시작일</th>
+              <th>적용종료일</th>
+              <th>수수료</th>
+              <th>구분</th>
+            </tr>
+          </thead>
+          <tbody id="fee-history-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('fee-history-modal')">닫기</button>
       </div>
     </div>
   </div>

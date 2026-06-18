@@ -47,14 +47,19 @@ function toApiJob(row) {
   };
 }
 
-async function getIncomeFee(env, resultType) {
-  if (!resultType) return 0;
+async function getIncomeFee(env, resultType, completeDate) {
+  if (!resultType || !completeDate) return 0;
 
   const row = await env.DB.prepare(`
     SELECT income_fee
     FROM fee_rates
     WHERE result_type = ?
-  `).bind(resultType).first();
+      AND is_active = 1
+      AND valid_from <= ?
+      AND (valid_to IS NULL OR valid_to >= ?)
+    ORDER BY valid_from DESC
+    LIMIT 1
+  `).bind(resultType, completeDate, completeDate).first();
 
   return Number(row?.income_fee || 0);
 }
@@ -76,7 +81,7 @@ async function upsertJob(env, input) {
   const region = String(input.region || "").trim();
   const manager = String(input.manager || "").trim();
   const resultType = String(input.resultType || input.result_type || "").trim();
-  const incomeFee = status === "완료" ? await getIncomeFee(env, resultType) : 0;
+  const incomeFee = status === "완료" ? await getIncomeFee(env, resultType, completeDate) : 0;
 
   await env.DB.prepare(`
     INSERT INTO maintenance_jobs (

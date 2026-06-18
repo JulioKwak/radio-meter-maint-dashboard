@@ -5,13 +5,14 @@ const REGIONS = [
   "전라북도", "제주특별자치도"
 ];
 
-const EXPENSE_ITEMS = ["인건비", "전문가비", "차량렌탈비", "차량유지비", "성과급", "출장비", "자재비"];
+const EXPENSE_ITEMS = ["인건비", "전문가 수수료", "차량렌탈비", "차량유지비", "출장비", "성과급", "자재비"];
 const PAGE_SIZE = 20;
 
 let app = {
   jobs: [],
   filteredJobs: [],
   fees: [],
+  allFees: [],
   expenses: {
     monthlyExpenses: {}
   },
@@ -48,7 +49,7 @@ function fillYearSelect() {
   const select = document.getElementById("expense-year");
   const y = new Date().getFullYear();
   select.innerHTML = "";
-  for (let year = 2025; year <= y + 10; year++) {
+  for (let year = 2024; year <= y + 10; year++) {
     const opt = document.createElement("option");
     opt.value = String(year);
     opt.textContent = `${year}년`;
@@ -120,6 +121,7 @@ async function loadJobs() {
 async function loadFees() {
   const data = await apiFetch("/api/fees");
   app.fees = data.fees || [];
+  app.allFees = data.allFees || data.fees || [];
 }
 
 async function loadExpenses() {
@@ -402,7 +404,7 @@ async function handleExcelUpload(e) {
     const targetNos = new Set([...(preview.insertNos || []), ...(preview.updateNos || [])]);
     const rowsToSave = parsed.jobs.filter(row => targetNos.has(row.maintenanceNo));
 
-    const BATCH_SIZE = 100;
+    const BATCH_SIZE = 1000;
     let inserted = 0;
     let updated = 0;
     let invalid = [];
@@ -582,12 +584,15 @@ function ensureIncomeDateDefaults() {
 function syncFeeRowsWithJobs() {
   const resultTypes = [...new Set(app.jobs.map(j => j.resultType).filter(Boolean))];
   let changed = false;
+  const defaultStart = "2026-04-01";
+
   resultTypes.forEach(rt => {
     if (!app.fees.some(f => f.resultType === rt)) {
-      app.fees.push({ resultType: rt, incomeFee: 0 });
+      app.fees.push({ resultType: rt, incomeFee: 0, validFrom: defaultStart, validTo: "" });
       changed = true;
     }
   });
+
   if (changed) renderFees();
 }
 
@@ -595,15 +600,19 @@ function renderFees() {
   const incomeTbody = document.getElementById("income-fee-tbody");
 
   if (!app.fees.length) {
-    incomeTbody.innerHTML = `<tr><td colspan="3" class="muted">단가표 데이터가 없습니다.</td></tr>`;
+    incomeTbody.innerHTML = `<tr><td colspan="5" class="muted">현재 적용 중인 단가표 데이터가 없습니다.</td></tr>`;
     return;
   }
 
   incomeTbody.innerHTML = app.fees.map((f, i) => `
     <tr>
-      <td><input value="${escapeHtml(f.resultType || "")}" onchange="updateFee(${i}, 'resultType', this.value)"></td>
+      <td>${escapeHtml(f.resultType || "")}</td>
       <td><input type="number" value="${Number(f.incomeFee || 0)}" onchange="updateFee(${i}, 'incomeFee', this.value)"></td>
-      <td style="text-align:center"><button class="btn btn-sm btn-danger" onclick="removeFeeRow(${i})">삭제</button></td>
+      <td><input type="date" value="${escapeHtml(f.validFrom || "")}" onchange="updateFee(${i}, 'validFrom', this.value)"></td>
+      <td>${f.validTo ? escapeHtml(f.validTo) : '<span class="badge-pill badge-done">현재 적용 중</span>'}</td>
+      <td style="text-align:center">
+        <button class="btn btn-sm btn-secondary" onclick="showFeeHistory('${escapeJs(f.resultType)}')">이력</button>
+      </td>
     </tr>
   `).join("");
 }
@@ -617,12 +626,11 @@ function updateFee(idx, field, value) {
 }
 
 function addFeeRow() {
-  app.fees.push({ resultType: "새 유형", incomeFee: 0 });
+  app.fees.push({ resultType: "새 유형", incomeFee: 0, validFrom: new Date().toISOString().slice(0, 10), validTo: "" });
   renderFees();
 }
 
 function removeFeeRow(idx) {
-  if (!confirm("해당 단가 행을 삭제하시겠습니까?")) return;
   app.fees.splice(idx, 1);
   renderFees();
 }
@@ -631,8 +639,10 @@ async function saveFees() {
   const seen = new Set();
   const fees = app.fees
     .map(f => ({
+      id: f.id,
       resultType: String(f.resultType || "").trim(),
-      incomeFee: Number(f.incomeFee) || 0
+      incomeFee: Number(f.incomeFee) || 0,
+      validFrom: String(f.validFrom || "").trim() || "2026-04-01"
     }))
     .filter(f => f.resultType)
     .filter(f => {
@@ -642,14 +652,120 @@ async function saveFees() {
     });
 
   try {
-    const result = await apiFetch("/api/fees", { method: "POST", body: JSON.stringify({ fees }) });
+    const result = await apiFetch("/api/fees", {
+      method: "POST",
+      body: JSON.stringify({ action: "saveCurrent", fees })
+    });
+
     app.fees = result.fees || fees;
+    app.allFees = result.allFees || app.fees;
     renderFees();
     renderIncome();
-    showToast("단가표가 저장되었습니다.");
+    showToast("현재 단가표가 저장되었습니다.");
   } catch (err) {
     showToast("단가표 저장 실패: " + err.message, true);
   }
+}
+
+function openNewRateModal() {
+  const today = new Date().toISOString().slice(0, 10);
+  const dateInput = document.getElementById("new-rate-valid-from");
+  dateInput.value = today;
+
+  const tbody = document.getElementById("new-rate-tbody");
+  tbody.innerHTML = app.fees.map((f, i) => `
+    <tr>
+      <td>${escapeHtml(f.resultType || "")}</td>
+      <td style="text-align:right">${won(f.incomeFee || 0)}</td>
+      <td>
+        <input type="number" value="${Number(f.incomeFee || 0)}" data-result-type="${escapeHtml(f.resultType || "")}" style="text-align:right">
+      </td>
+    </tr>
+  `).join("");
+
+  document.getElementById("new-rate-modal").classList.add("open");
+}
+
+async function saveNewRates() {
+  const validFrom = document.getElementById("new-rate-valid-from").value;
+  if (!validFrom) {
+    showToast("신규 단가 적용시작일을 입력하세요.", true);
+    return;
+  }
+
+  const inputs = [...document.querySelectorAll("#new-rate-tbody input[data-result-type]")];
+  const fees = inputs.map(input => ({
+    resultType: input.dataset.resultType,
+    incomeFee: Number(input.value) || 0
+  })).filter(f => f.resultType);
+
+  const msg =
+    `신규 단가를 ${validFrom}부터 적용합니다.\n\n` +
+    `기존 현재 단가는 ${addDaysToDate(validFrom, -1)}까지로 자동 종료됩니다.\n` +
+    `신규 단가 ${fees.length}건을 저장하시겠습니까?`;
+
+  if (!confirm(msg)) return;
+
+  try {
+    const result = await apiFetch("/api/fees", {
+      method: "POST",
+      body: JSON.stringify({ action: "applyNewRates", validFrom, fees })
+    });
+
+    app.fees = result.fees || [];
+    app.allFees = result.allFees || app.fees;
+    closeModal("new-rate-modal");
+    renderFees();
+    renderIncome();
+    showToast("신규 단가가 적용되었습니다.");
+  } catch (err) {
+    showToast("신규 단가 저장 실패: " + err.message, true);
+  }
+}
+
+function showFeeHistory(resultType) {
+  document.getElementById("fee-history-title").textContent = `단가 이력 - ${resultType}`;
+  const tbody = document.getElementById("fee-history-tbody");
+  const rows = (app.allFees || [])
+    .filter(f => f.resultType === resultType)
+    .sort((a, b) => String(a.validFrom || "").localeCompare(String(b.validFrom || "")));
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">단가 이력이 없습니다.</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(f => `
+      <tr>
+        <td>${escapeHtml(f.validFrom || "-")}</td>
+        <td>${f.validTo ? escapeHtml(f.validTo) : '<span class="badge-pill badge-done">현재</span>'}</td>
+        <td style="text-align:right">${won(f.incomeFee || 0)}</td>
+        <td style="text-align:center">${f.isCurrent ? "현재" : "과거"}</td>
+      </tr>
+    `).join("");
+  }
+
+  document.getElementById("fee-history-modal").classList.add("open");
+}
+
+function addDaysToDate(dateString, days) {
+  const [y, m, d] = dateString.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return formatDateLocal(dt);
+}
+
+function getEffectiveFee(resultType, completeDate) {
+  if (!resultType || !completeDate) return 0;
+
+  const rows = (app.allFees || [])
+    .filter(f => f.resultType === resultType)
+    .filter(f => {
+      const from = f.validFrom || "0000-00-00";
+      const to = f.validTo || "9999-12-31";
+      return compareDate(from, completeDate) <= 0 && compareDate(to, completeDate) >= 0;
+    })
+    .sort((a, b) => String(b.validFrom || "").localeCompare(String(a.validFrom || "")));
+
+  return Number(rows[0]?.incomeFee || 0);
 }
 
 function getIncomeDateRange() {
@@ -665,32 +781,30 @@ function resetIncomeFilter() {
   renderIncome();
 }
 
-function feeMap() {
-  const map = {};
-  app.fees.forEach(f => {
-    map[f.resultType] = {
-      incomeFee: Number(f.incomeFee) || 0
-    };
-  });
-  return map;
-}
-
 function calculateIncome(start, end) {
-  const map = feeMap();
   const byType = {};
   let total = 0;
 
   app.jobs.forEach(j => {
     if (j.status !== "완료") return;
+    if (!j.completeDate) return;
     if (start && compareDate(j.completeDate, start) < 0) return;
     if (end && compareDate(j.completeDate, end) > 0) return;
 
     const type = j.resultType || "미분류";
-    const fee = Number(map[type]?.incomeFee || 0);
-    if (!byType[type]) byType[type] = { count: 0, fee, amount: 0 };
+    const fee = getEffectiveFee(type, j.completeDate);
+
+    if (!byType[type]) byType[type] = { count: 0, amount: 0, rates: new Set() };
     byType[type].count += 1;
     byType[type].amount += fee;
+    byType[type].rates.add(fee);
     total += fee;
+  });
+
+  Object.values(byType).forEach(v => {
+    const rates = [...v.rates];
+    v.fee = rates.length === 1 ? rates[0] : null;
+    v.feeLabel = rates.length === 1 ? won(rates[0]) : "기간별 적용";
   });
 
   return { total, byType };
@@ -727,7 +841,7 @@ function renderIncome() {
     tbody.innerHTML = rows.map(([type, v]) => `
       <tr>
         <td>${escapeHtml(type)}</td>
-        <td style="text-align:right">${won(v.fee)}</td>
+        <td style="text-align:right">${escapeHtml(v.feeLabel)}</td>
         <td style="text-align:center">${v.count.toLocaleString()}건</td>
         <td style="text-align:right;font-weight:700;color:var(--primary)">${won(v.amount)}</td>
       </tr>
