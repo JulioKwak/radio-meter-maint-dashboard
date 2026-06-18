@@ -24,12 +24,17 @@ CREATE TABLE maintenance_jobs (
 
 CREATE TABLE fee_rates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  result_type TEXT NOT NULL UNIQUE,
+  result_type TEXT NOT NULL,
   income_fee INTEGER NOT NULL DEFAULT 0,
+  valid_from TEXT NOT NULL,
+  valid_to TEXT,
   is_active INTEGER DEFAULT 1,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_fee_rates_result_type ON fee_rates(result_type);
+CREATE INDEX idx_fee_rates_period ON fee_rates(valid_from, valid_to);
 
 CREATE TABLE monthly_expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,17 +56,17 @@ CREATE INDEX idx_jobs_region ON maintenance_jobs(region);
 CREATE INDEX idx_jobs_manager ON maintenance_jobs(manager);
 CREATE INDEX idx_jobs_result_type ON maintenance_jobs(result_type);
 
-INSERT INTO fee_rates (result_type, income_fee)
+INSERT INTO fee_rates (result_type, income_fee, valid_from, valid_to)
 VALUES
-  ('A(기타)', 0),
-  ('A(시설점검)', 0),
-  ('B(모뎀설치)', 0),
-  ('C(전원선설치)', 0),
-  ('C*(체결변경)', 0),
-  ('D(계기함교체)', 0),
-  ('E(계기1대교체)', 0),
-  ('F(계기2대교체)', 0),
-  ('J(계기함교체+a)', 0),
-  ('K(계기1대교체+a)', 0),
-  ('L(계기2대교체+a)', 0),
-  ('M(차단기교체)', 0);
+  ('A(기타)', 0, '2026-04-01', NULL),
+  ('A(시설점검)', 0, '2026-04-01', NULL),
+  ('B(모뎀설치)', 0, '2026-04-01', NULL),
+  ('C(전원선설치)', 0, '2026-04-01', NULL),
+  ('C*(체결변경)', 0, '2026-04-01', NULL),
+  ('D(계기함교체)', 0, '2026-04-01', NULL),
+  ('E(계기1대교체)', 0, '2026-04-01', NULL),
+  ('F(계기2대교체)', 0, '2026-04-01', NULL),
+  ('J(계기함교체+a)', 0, '2026-04-01', NULL),
+  ('K(계기1대교체+a)', 0, '2026-04-01', NULL),
+  ('L(계기2대교체+a)', 0, '2026-04-01', NULL),
+  ('M(차단기교체)', 0, '2026-04-01', NULL);
