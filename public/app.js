@@ -998,6 +998,30 @@ function renderExpense() {
   renderExpenseChart();
 }
 
+async function saveExpenses() {
+  try {
+    await apiFetch("/api/expenses", {
+      method: "POST",
+      body: JSON.stringify({
+        monthlyExpenses: app.expenses.monthlyExpenses || {}
+      })
+    });
+
+    await loadExpenses();
+    renderExpense();
+    renderIncome();
+
+    showToast("지출 데이터가 저장되었습니다.");
+  } catch (err) {
+    console.error(err);
+    showToast("지출 데이터 저장 실패: " + err.message, true);
+  }
+}
+
+async function saveExpense() {
+  return saveExpenses();
+}
+
 function updateMonthlyExpense(monthKey, item, value) {
   if (!app.expenses.monthlyExpenses[monthKey]) app.expenses.monthlyExpenses[monthKey] = {};
   app.expenses.monthlyExpenses[monthKey][item] = Number(value) || 0;
@@ -1069,8 +1093,4 @@ function escapeHtml(v) {
 
 function escapeJs(v) {
   return String(v ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-}
-
-function saveExpenses() {
-  return saveExpense();
 }
