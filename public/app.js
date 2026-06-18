@@ -5,7 +5,7 @@ const REGIONS = [
   "전라북도", "제주특별자치도"
 ];
 
-const EXPENSE_ITEMS = ["인건비", "전문가 수수료", "차량렌탈비", "차량유지비", "성과급", "출장비", "자재비"];
+const EXPENSE_ITEMS = ["인건비", "전문가비", "차량렌탈비", "차량유지비", "성과급", "출장비", "자재비"];
 const PAGE_SIZE = 20;
 
 let app = {
