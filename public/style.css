@@ -554,6 +554,97 @@ tr:hover td { background: var(--gray-50); }
   border-radius: 4px;
 }
 
+
+/* 단가표 화면 정렬 보정 */
+.fee-current-table th,
+.fee-current-table td,
+.fee-new-rate-table th,
+.fee-new-rate-table td,
+.fee-history-table th,
+.fee-history-table td {
+  vertical-align: middle;
+}
+
+.fee-current-table th:nth-child(1),
+.fee-current-table td:nth-child(1),
+.fee-new-rate-table th:nth-child(1),
+.fee-new-rate-table td:nth-child(1) {
+  text-align: left;
+}
+
+.fee-current-table th:nth-child(2),
+.fee-current-table td:nth-child(2),
+.fee-new-rate-table th:nth-child(2),
+.fee-new-rate-table td:nth-child(2),
+.fee-new-rate-table th:nth-child(3),
+.fee-new-rate-table td:nth-child(3),
+.fee-history-table th:nth-child(3),
+.fee-history-table td:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-current-table th:nth-child(3),
+.fee-current-table td:nth-child(3),
+.fee-current-table th:nth-child(4),
+.fee-current-table td:nth-child(4),
+.fee-current-table th:nth-child(5),
+.fee-current-table td:nth-child(5),
+.fee-history-table th:nth-child(1),
+.fee-history-table td:nth-child(1),
+.fee-history-table th:nth-child(2),
+.fee-history-table td:nth-child(2),
+.fee-history-table th:nth-child(4),
+.fee-history-table td:nth-child(4) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-current-table td:nth-child(2) input,
+.fee-new-rate-table td:nth-child(3) input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-current-table td:nth-child(3) input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-current-table th:nth-child(1),
+.fee-current-table td:nth-child(1) {
+  min-width: 170px;
+}
+
+.fee-current-table th:nth-child(2),
+.fee-current-table td:nth-child(2),
+.fee-new-rate-table th:nth-child(2),
+.fee-new-rate-table td:nth-child(2),
+.fee-new-rate-table th:nth-child(3),
+.fee-new-rate-table td:nth-child(3),
+.fee-history-table th:nth-child(3),
+.fee-history-table td:nth-child(3) {
+  min-width: 130px;
+}
+
+.fee-current-table th:nth-child(3),
+.fee-current-table td:nth-child(3),
+.fee-current-table th:nth-child(4),
+.fee-current-table td:nth-child(4),
+.fee-history-table th:nth-child(1),
+.fee-history-table td:nth-child(1),
+.fee-history-table th:nth-child(2),
+.fee-history-table td:nth-child(2) {
+  min-width: 120px;
+}
+
+.fee-current-table th:nth-child(5),
+.fee-current-table td:nth-child(5),
+.fee-history-table th:nth-child(4),
+.fee-history-table td:nth-child(4) {
+  min-width: 80px;
+}
+
 .notice {
   background: #fff;
   border: 1px solid var(--gray-200);
