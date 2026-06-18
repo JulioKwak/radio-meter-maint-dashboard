@@ -21,9 +21,9 @@ function normalizeNo(value) {
 }
 
 function normalizeDate(value) {
-  if (!value) return null;
+  if (!value) return "";
   const s = String(value).trim();
-  if (!s) return null;
+  if (!s) return "";
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
     const [y, m, d] = s.split("-");
     return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
@@ -40,11 +40,11 @@ function normalizeIncoming(input, index) {
   const status = normalizeStatus(input.status);
 
   if (!/^\d{12}$/.test(maintenanceNo)) {
-    return { ok: false, index, reason: "유지보수 No 12자리 오류", maintenanceNo };
+    return { ok: false, index, reason: "유지보수 No 12자리 오류", value: input.maintenanceNo || input.maintenance_no || "" };
   }
 
   if (!["신청", "보완 요청", "완료"].includes(status)) {
-    return { ok: false, index, reason: "상태값 오류", maintenanceNo };
+    return { ok: false, index, maintenanceNo, reason: "상태값 오류", value: input.status || "" };
   }
 
   return {
@@ -62,86 +62,54 @@ function normalizeIncoming(input, index) {
   };
 }
 
+function sameJob(a, b) {
+  return String(a.status || "") === String(b.status || "") &&
+    String(a.requestDate || "") === String(b.requestDate || "") &&
+    String(a.urgentDueDate || "") === String(b.urgentDueDate || "") &&
+    String(a.completeDate || "") === String(b.completeDate || "") &&
+    String(a.region || "") === String(b.region || "") &&
+    String(a.manager || "") === String(b.manager || "") &&
+    String(a.resultType || "") === String(b.resultType || "");
+}
+
+function toCompareJob(row) {
+  return {
+    maintenanceNo: row.maintenance_no,
+    status: row.status || "",
+    requestDate: row.request_date || "",
+    urgentDueDate: row.urgent_due_date || "",
+    completeDate: row.complete_date || "",
+    region: row.region || "",
+    manager: row.manager || "",
+    resultType: row.result_type || ""
+  };
+}
+
 function chunk(array, size) {
   const chunks = [];
   for (let i = 0; i < array.length; i += size) chunks.push(array.slice(i, i + size));
   return chunks;
 }
 
-async function loadFeeMap(env) {
+async function loadExistingMap(env, maintenanceNos) {
   const map = new Map();
-  const result = await env.DB.prepare(`
-    SELECT result_type, income_fee
-    FROM fee_rates
-  `).all();
-
-  for (const row of result.results || []) {
-    map.set(row.result_type, Number(row.income_fee || 0));
-  }
-
-  return map;
-}
-
-async function loadExistingNos(env, maintenanceNos) {
-  const set = new Set();
   const uniqueNos = [...new Set(maintenanceNos)];
 
   for (const nos of chunk(uniqueNos, 100)) {
     const placeholders = nos.map(() => "?").join(",");
     const result = await env.DB.prepare(`
-      SELECT maintenance_no
+      SELECT maintenance_no, status, request_date, urgent_due_date, complete_date,
+             region, manager, result_type
       FROM maintenance_jobs
       WHERE maintenance_no IN (${placeholders})
     `).bind(...nos).all();
 
-    for (const row of result.results || []) set.add(row.maintenance_no);
-  }
-
-  return set;
-}
-
-async function upsertRows(env, rows, feeMap) {
-  const CHUNK_SIZE = 50;
-
-  for (const group of chunk(rows, CHUNK_SIZE)) {
-    const valuesSql = group.map(() => `(
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-    )`).join(",");
-
-    const params = [];
-    for (const row of group) {
-      const incomeFee = row.status === "완료" ? Number(feeMap.get(row.resultType) || 0) : 0;
-      params.push(
-        row.maintenanceNo,
-        row.status,
-        row.requestDate || null,
-        row.urgentDueDate || null,
-        row.completeDate || null,
-        row.region,
-        row.manager,
-        row.resultType,
-        incomeFee
-      );
+    for (const row of result.results || []) {
+      map.set(row.maintenance_no, toCompareJob(row));
     }
-
-    await env.DB.prepare(`
-      INSERT INTO maintenance_jobs (
-        maintenance_no, status, request_date, urgent_due_date, complete_date,
-        region, manager, result_type, applied_income_fee, created_at, updated_at
-      )
-      VALUES ${valuesSql}
-      ON CONFLICT(maintenance_no) DO UPDATE SET
-        status = excluded.status,
-        request_date = excluded.request_date,
-        urgent_due_date = excluded.urgent_due_date,
-        complete_date = excluded.complete_date,
-        region = excluded.region,
-        manager = excluded.manager,
-        result_type = excluded.result_type,
-        applied_income_fee = excluded.applied_income_fee,
-        updated_at = CURRENT_TIMESTAMP
-    `).bind(...params).run();
   }
+
+  return map;
 }
 
 export async function onRequestPost(context) {
@@ -154,11 +122,11 @@ export async function onRequestPost(context) {
     const rows = Array.isArray(body.rows) ? body.rows : [];
 
     if (!rows.length) {
-      return json({ error: "업로드할 rows 데이터가 없습니다." }, 400);
+      return json({ error: "검토할 rows 데이터가 없습니다." }, 400);
     }
 
-    if (rows.length > 10000) {
-      return json({ error: "한 번에 저장 가능한 건수는 10,000건입니다." }, 400);
+    if (rows.length > 30000) {
+      return json({ error: "한 번에 30,000건까지만 검토할 수 있습니다." }, 400);
     }
 
     const validRows = [];
@@ -174,7 +142,7 @@ export async function onRequestPost(context) {
 
       const no = normalized.row.maintenanceNo;
       if (seen.has(no)) {
-        invalid.push({ index, maintenanceNo: no, reason: "요청 내 유지보수 No 중복" });
+        invalid.push({ index, maintenanceNo: no, reason: "엑셀 내 유지보수 No 중복" });
         return;
       }
 
@@ -182,32 +150,46 @@ export async function onRequestPost(context) {
       validRows.push(normalized.row);
     });
 
-    if (!validRows.length) {
-      return json({ ok: false, error: "저장 가능한 정상 데이터가 없습니다.", invalid }, 400);
-    }
+    const existingMap = await loadExistingMap(context.env, validRows.map(r => r.maintenanceNo));
 
-    const existingNos = await loadExistingNos(context.env, validRows.map(r => r.maintenanceNo));
-    const feeMap = await loadFeeMap(context.env);
-
-    await upsertRows(context.env, validRows, feeMap);
-
-    let inserted = 0;
-    let updated = 0;
+    const insertNos = [];
+    const updateNos = [];
+    const sameNos = [];
+    const updateSamples = [];
 
     for (const row of validRows) {
-      if (existingNos.has(row.maintenanceNo)) updated += 1;
-      else inserted += 1;
+      const existing = existingMap.get(row.maintenanceNo);
+
+      if (!existing) {
+        insertNos.push(row.maintenanceNo);
+        continue;
+      }
+
+      if (sameJob(row, existing)) {
+        sameNos.push(row.maintenanceNo);
+      } else {
+        updateNos.push(row.maintenanceNo);
+        if (updateSamples.length < 20) {
+          updateSamples.push({ maintenanceNo: row.maintenanceNo, before: existing, after: row });
+        }
+      }
     }
 
     return json({
       ok: true,
-      inserted,
-      updated,
-      invalid,
       total: rows.length,
-      saved: validRows.length
+      validCount: validRows.length,
+      insertCount: insertNos.length,
+      updateCount: updateNos.length,
+      sameCount: sameNos.length,
+      invalidCount: invalid.length,
+      toSaveCount: insertNos.length + updateNos.length,
+      insertNos,
+      updateNos,
+      invalid: invalid.slice(0, 200),
+      updateSamples
     });
   } catch (err) {
-    return json({ error: err.message || "엑셀 업로드 처리 실패" }, 500);
+    return json({ error: "엑셀 데이터 검토 실패", message: err.message || String(err) }, 500);
   }
 }
