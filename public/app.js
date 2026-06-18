@@ -411,11 +411,15 @@ function normalizeMaintenanceNo(v) {
   return String(v ?? "").replace(/[^0-9]/g, "").trim();
 }
 
-function normalizeStatus(v) {
-  const s = String(v ?? "").trim().replace(/\s+/g, " ");
-  if (s === "보완" || s === "보완요청") return "보완 요청";
-  if (s === "완료") return "완료";
-  return "신청";
+function normalizeStatus(value) {
+  const raw = String(value ?? "").trim();
+  const compact = raw.replace(/\s+/g, "");
+
+  if (!compact || compact === "신청") return "신청";
+  if (compact === "보완" || compact === "보완요청") return "보완 요청";
+  if (compact === "완료") return "완료";
+
+  return "";
 }
 
 function normalizeDate(v) {
