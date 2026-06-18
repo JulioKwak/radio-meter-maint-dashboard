@@ -404,7 +404,7 @@ async function handleExcelUpload(e) {
     const targetNos = new Set([...(preview.insertNos || []), ...(preview.updateNos || [])]);
     const rowsToSave = parsed.jobs.filter(row => targetNos.has(row.maintenanceNo));
 
-    const BATCH_SIZE = 1000;
+    const BATCH_SIZE = 100;
     let inserted = 0;
     let updated = 0;
     let invalid = [];
@@ -835,15 +835,23 @@ function renderIncome() {
   const tbody = document.getElementById("income-detail-tbody");
   const rows = Object.entries(income.byType).sort((a,b) => b[1].amount - a[1].amount);
 
+  const totalCount = rows.reduce((sum, [, v]) => sum + Number(v.count || 0), 0);
+  const totalAmount = rows.reduce((sum, [, v]) => sum + Number(v.amount || 0), 0);
+
+  const totalCountEl = document.getElementById("income-detail-total-count");
+  const totalAmountEl = document.getElementById("income-detail-total-amount");
+  if (totalCountEl) totalCountEl.textContent = `${totalCount.toLocaleString()}건`;
+  if (totalAmountEl) totalAmountEl.textContent = won(totalAmount);
+
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="4" class="muted">완료 데이터가 없습니다.</td></tr>`;
   } else {
     tbody.innerHTML = rows.map(([type, v]) => `
       <tr>
         <td>${escapeHtml(type)}</td>
-        <td style="text-align:right">${escapeHtml(v.feeLabel)}</td>
-        <td style="text-align:center">${v.count.toLocaleString()}건</td>
-        <td style="text-align:right;font-weight:700;color:var(--primary)">${won(v.amount)}</td>
+        <td>${escapeHtml(v.feeLabel)}</td>
+        <td>${v.count.toLocaleString()}건</td>
+        <td class="amount-cell">${won(v.amount)}</td>
       </tr>
     `).join("");
   }
@@ -854,6 +862,7 @@ function renderIncome() {
 function renderIncomeCharts(byType) {
   const labels = Object.keys(byType);
   const amounts = labels.map(l => byType[l].amount);
+  const counts = labels.map(l => byType[l].count || 0);
 
   const ctx1 = document.getElementById("income-type-chart");
   if (app.incomeTypeChart) app.incomeTypeChart.destroy();
@@ -861,12 +870,24 @@ function renderIncomeCharts(byType) {
     type: "doughnut",
     data: {
       labels,
-      datasets: [{ data: amounts }]
+      datasets: [{ data: amounts, counts }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: "right" } }
+      plugins: {
+        legend: { position: "right" },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const label = context.label || "";
+              const amount = Number(context.raw || 0);
+              const count = Number(context.dataset.counts?.[context.dataIndex] || 0);
+              return `${label}: ${won(amount)} / ${count.toLocaleString()}건`;
+            }
+          }
+        }
+      }
     }
   });
 

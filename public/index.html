@@ -10,7 +10,7 @@
 </head>
 <body>
   <header>
-    <div class="logo-icon">📡</div>
+    <div class="logo-icon"><img src="/logo.png" alt="로고"></div>
     <h1>무선국 원격검침시설 유지보수 자체사업 현황</h1>
     <span class="badge" id="current-date"></span>
   </header>
@@ -115,7 +115,7 @@
           <span class="muted" id="work-count-label">총 0건</span>
         </div>
         <div class="table-scroll">
-          <table>
+          <table class="work-table">
             <thead>
               <tr>
                 <th>No.</th>
@@ -195,7 +195,7 @@
           <span class="title">결과유형별 완료 건수 및 수입 상세</span>
         </div>
         <div class="table-scroll">
-          <table>
+          <table class="income-detail-table">
             <thead>
               <tr>
                 <th>결과유형</th>
@@ -205,6 +205,13 @@
               </tr>
             </thead>
             <tbody id="income-detail-tbody"></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">합계</td>
+                <td id="income-detail-total-count">0건</td>
+                <td id="income-detail-total-amount">₩0</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>

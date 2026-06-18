@@ -51,7 +51,14 @@ header {
   background: rgba(255,255,255,.15);
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px;
+  overflow: hidden;
+}
+
+.logo-icon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
 }
 
 header h1 {
@@ -326,6 +333,86 @@ td {
 
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: var(--gray-50); }
+
+/* 업무 테이블 정렬 보정 */
+.work-table th,
+.work-table td {
+  vertical-align: middle;
+}
+
+.work-table th:nth-child(1),
+.work-table td:nth-child(1),
+.work-table th:nth-child(3),
+.work-table td:nth-child(3),
+.work-table th:nth-child(4),
+.work-table td:nth-child(4),
+.work-table th:nth-child(5),
+.work-table td:nth-child(5),
+.work-table th:nth-child(6),
+.work-table td:nth-child(6),
+.work-table th:nth-child(7),
+.work-table td:nth-child(7),
+.work-table th:nth-child(8),
+.work-table td:nth-child(8),
+.work-table th:nth-child(10),
+.work-table td:nth-child(10) {
+  text-align: center;
+}
+
+.work-table th:nth-child(2),
+.work-table td:nth-child(2) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.work-table th:nth-child(9),
+.work-table td:nth-child(9) {
+  text-align: left;
+}
+
+.income-detail-table th,
+.income-detail-table td {
+  vertical-align: middle;
+}
+
+.income-detail-table th:nth-child(1),
+.income-detail-table td:nth-child(1) {
+  text-align: left;
+}
+
+.income-detail-table th:nth-child(2),
+.income-detail-table td:nth-child(2),
+.income-detail-table th:nth-child(4),
+.income-detail-table td:nth-child(4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.income-detail-table th:nth-child(3),
+.income-detail-table td:nth-child(3) {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.income-detail-table tfoot td {
+  background: var(--primary-light);
+  border-top: 2px solid #c2d6f8;
+  color: var(--gray-900);
+  font-weight: 800;
+}
+
+.income-detail-table tfoot td:nth-child(1) {
+  text-align: center;
+}
+
+.income-detail-table tfoot td:nth-child(2) {
+  text-align: center;
+}
+
+.income-detail-table tfoot td:nth-child(3) {
+  text-align: right;
+  color: var(--primary);
+}
 
 .badge-pill {
   display: inline-flex;
