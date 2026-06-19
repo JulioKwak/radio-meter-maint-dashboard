@@ -513,27 +513,65 @@ function normalizeStatus(value) {
 function normalizeDate(v) {
   if (v === null || v === undefined || v === "") return "";
 
+  // Excel 날짜 셀이 Date 객체로 들어오는 경우, toISOString()을 쓰면
+  // UTC 변환 때문에 한국 시간 기준 날짜가 -1일로 저장될 수 있습니다.
+  // 그래서 반드시 로컬 날짜(getFullYear/getMonth/getDate) 기준으로 변환합니다.
   if (v instanceof Date && !isNaN(v)) {
-    return v.toISOString().slice(0, 10);
+    return formatDateLocal(v);
+  }
+
+  // Excel 날짜가 숫자 serial 값으로 들어오는 경우까지 대비합니다.
+  if (typeof v === "number" && isFinite(v)) {
+    return excelSerialDateToLocalDate(v);
   }
 
   const s = String(v).trim();
   if (!s) return "";
 
+  // 숫자 형태의 Excel serial 문자열 처리
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s);
+    if (n > 20000 && n < 80000) return excelSerialDateToLocalDate(n);
+  }
+
+  // 2026-6-8, 2026-06-08
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
     const [y, m, d] = s.split("-");
     return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  if (/^\d{4}[./]\d{1,2}[./]\d{1,2}$/.test(s)) {
-    const [y, m, d] = s.split(/[./]/);
+  // 2026. 6. 8. / 2026.6.8 / 2026/6/8
+  if (/^\d{4}[./]\s*\d{1,2}[./]\s*\d{1,2}\.?$/.test(s)) {
+    const cleaned = s.replace(/\.$/, "");
+    const [y, m, d] = cleaned.split(/[./]/).map(x => x.trim());
     return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
+  // 2026년 6월 8일
+  const koreanMatch = s.match(/^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일$/);
+  if (koreanMatch) {
+    const [, y, m, d] = koreanMatch;
+    return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // 마지막 예외 처리도 toISOString()을 쓰지 않고 로컬 날짜로 처리합니다.
   const date = new Date(s);
-  if (!isNaN(date)) return date.toISOString().slice(0, 10);
+  if (!isNaN(date)) return formatDateLocal(date);
 
   return s;
+}
+
+function excelSerialDateToLocalDate(serial) {
+  // Excel 1900 date system 기준. 시간값이 붙어 있어도 날짜만 사용합니다.
+  const wholeDays = Math.floor(Number(serial));
+  const utcDays = wholeDays - 25569;
+  const utcValue = utcDays * 86400 * 1000;
+  const date = new Date(utcValue);
+
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function compareDate(a, b) {
@@ -626,7 +664,7 @@ function updateFee(idx, field, value) {
 }
 
 function addFeeRow() {
-  app.fees.push({ resultType: "새 유형", incomeFee: 0, validFrom: new Date().toISOString().slice(0, 10), validTo: "" });
+  app.fees.push({ resultType: "새 유형", incomeFee: 0, validFrom: formatDateLocal(new Date()), validTo: "" });
   renderFees();
 }
 
@@ -668,7 +706,7 @@ async function saveFees() {
 }
 
 function openNewRateModal() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatDateLocal(new Date());
   const dateInput = document.getElementById("new-rate-valid-from");
   dateInput.value = today;
 
