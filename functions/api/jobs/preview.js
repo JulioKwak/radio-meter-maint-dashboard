@@ -28,8 +28,9 @@ function normalizeDate(value) {
     const [y, m, d] = s.split("-");
     return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
-  if (/^\d{4}[./]\d{1,2}[./]\d{1,2}$/.test(s)) {
-    const [y, m, d] = s.split(/[./]/);
+  if (/^\d{4}[./]\s*\d{1,2}[./]\s*\d{1,2}\.?$/.test(s)) {
+    const cleaned = s.replace(/\.$/, "");
+    const [y, m, d] = cleaned.split(/[./]/).map(v => v.trim());
     return `${y.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
   return s;
@@ -85,28 +86,16 @@ function toCompareJob(row) {
   };
 }
 
-function chunk(array, size) {
-  const chunks = [];
-  for (let i = 0; i < array.length; i += size) chunks.push(array.slice(i, i + size));
-  return chunks;
-}
-
-async function loadExistingMap(env, maintenanceNos) {
+async function loadAllExistingMap(env) {
   const map = new Map();
-  const uniqueNos = [...new Set(maintenanceNos)];
+  const result = await env.DB.prepare(`
+    SELECT maintenance_no, status, request_date, urgent_due_date, complete_date,
+           region, manager, result_type
+    FROM maintenance_jobs
+  `).all();
 
-  for (const nos of chunk(uniqueNos, 100)) {
-    const placeholders = nos.map(() => "?").join(",");
-    const result = await env.DB.prepare(`
-      SELECT maintenance_no, status, request_date, urgent_due_date, complete_date,
-             region, manager, result_type
-      FROM maintenance_jobs
-      WHERE maintenance_no IN (${placeholders})
-    `).bind(...nos).all();
-
-    for (const row of result.results || []) {
-      map.set(row.maintenance_no, toCompareJob(row));
-    }
+  for (const row of result.results || []) {
+    map.set(row.maintenance_no, toCompareJob(row));
   }
 
   return map;
@@ -132,8 +121,12 @@ export async function onRequestPost(context) {
     const validRows = [];
     const invalid = [];
     const seen = new Set();
+    const excelNoSet = new Set();
 
     rows.forEach((input, index) => {
+      const rawNo = normalizeNo(input.maintenanceNo || input.maintenance_no);
+      if (/^\d{12}$/.test(rawNo)) excelNoSet.add(rawNo);
+
       const normalized = normalizeIncoming(input, index);
       if (!normalized.ok) {
         invalid.push(normalized);
@@ -150,12 +143,14 @@ export async function onRequestPost(context) {
       validRows.push(normalized.row);
     });
 
-    const existingMap = await loadExistingMap(context.env, validRows.map(r => r.maintenanceNo));
+    const existingMap = await loadAllExistingMap(context.env);
 
     const insertNos = [];
     const updateNos = [];
     const sameNos = [];
+    const deleteNos = [];
     const updateSamples = [];
+    const deleteSamples = [];
 
     for (const row of validRows) {
       const existing = existingMap.get(row.maintenanceNo);
@@ -175,19 +170,30 @@ export async function onRequestPost(context) {
       }
     }
 
+    for (const [maintenanceNo, existing] of existingMap.entries()) {
+      if (!excelNoSet.has(maintenanceNo)) {
+        deleteNos.push(maintenanceNo);
+        if (deleteSamples.length < 20) deleteSamples.push(existing);
+      }
+    }
+
     return json({
       ok: true,
       total: rows.length,
+      dbCount: existingMap.size,
       validCount: validRows.length,
       insertCount: insertNos.length,
       updateCount: updateNos.length,
+      deleteCount: deleteNos.length,
       sameCount: sameNos.length,
       invalidCount: invalid.length,
-      toSaveCount: insertNos.length + updateNos.length,
+      toSaveCount: insertNos.length + updateNos.length + deleteNos.length,
       insertNos,
       updateNos,
+      deleteNos,
       invalid: invalid.slice(0, 200),
-      updateSamples
+      updateSamples,
+      deleteSamples
     });
   } catch (err) {
     return json({ error: "엑셀 데이터 검토 실패", message: err.message || String(err) }, 500);

@@ -373,6 +373,7 @@ async function handleExcelUpload(e) {
     const invalidTotal = clientInvalidCount + serverInvalidCount;
     const insertCount = Number(preview.insertCount || 0);
     const updateCount = Number(preview.updateCount || 0);
+    const deleteCount = Number(preview.deleteCount || 0);
     const sameCount = Number(preview.sameCount || 0);
     const toSaveCount = Number(preview.toSaveCount || 0);
 
@@ -382,20 +383,26 @@ async function handleExcelUpload(e) {
     if (preview.updateSamples?.length) {
       console.warn("Update samples", preview.updateSamples);
     }
+    if (preview.deleteSamples?.length) {
+      console.warn("Delete samples", preview.deleteSamples);
+    }
 
     const summary =
       `엑셀 검토 결과\n\n` +
       `엑셀 정상 행: ${parsed.jobs.length.toLocaleString()}건\n` +
+      `DB 기존 건수: ${Number(preview.dbCount || 0).toLocaleString()}건\n\n` +
       `신규 추가: ${insertCount.toLocaleString()}건\n` +
       `수정 예정: ${updateCount.toLocaleString()}건\n` +
+      `삭제 예정: ${deleteCount.toLocaleString()}건\n` +
       `변경 없음: ${sameCount.toLocaleString()}건\n` +
       `오류 제외: ${invalidTotal.toLocaleString()}건\n\n` +
-      `저장 대상: ${toSaveCount.toLocaleString()}건\n\n` +
-      (invalidTotal ? `오류 상세는 브라우저 콘솔에 표시됩니다.\n\n` : "") +
-      `신규/수정 건만 저장하시겠습니까?`;
+      `처리 대상: ${toSaveCount.toLocaleString()}건\n\n` +
+      (deleteCount ? `주의: DB에는 있지만 이번 엑셀에 없는 ${deleteCount.toLocaleString()}건은 삭제됩니다.\n` : "") +
+      (invalidTotal ? `오류 상세는 브라우저 콘솔에 표시됩니다.\n` : "") +
+      `\n신규/수정/삭제를 반영하시겠습니까?`;
 
     if (!toSaveCount) {
-      alert(summary.replace("신규/수정 건만 저장하시겠습니까?", "저장할 신규/수정 데이터가 없습니다."));
+      alert(summary.replace("신규/수정/삭제를 반영하시겠습니까?", "저장할 신규/수정/삭제 데이터가 없습니다."));
       return;
     }
 
@@ -403,10 +410,13 @@ async function handleExcelUpload(e) {
 
     const targetNos = new Set([...(preview.insertNos || []), ...(preview.updateNos || [])]);
     const rowsToSave = parsed.jobs.filter(row => targetNos.has(row.maintenanceNo));
+    const deleteNos = preview.deleteNos || [];
 
     const BATCH_SIZE = 100;
+    const DELETE_BATCH_SIZE = 100;
     let inserted = 0;
     let updated = 0;
+    let deleted = 0;
     let invalid = [];
 
     for (let i = 0; i < rowsToSave.length; i += BATCH_SIZE) {
@@ -431,6 +441,27 @@ async function handleExcelUpload(e) {
       await sleep(300);
     }
 
+    for (let i = 0; i < deleteNos.length; i += DELETE_BATCH_SIZE) {
+      const batch = deleteNos.slice(i, i + DELETE_BATCH_SIZE);
+      const batchNo = Math.floor(i / DELETE_BATCH_SIZE) + 1;
+      const totalBatch = Math.ceil(deleteNos.length / DELETE_BATCH_SIZE);
+
+      showToast(`삭제 반영 중... ${batchNo}/${totalBatch} (${i + batch.length}/${deleteNos.length}건)`);
+
+      const result = await apiFetchWithRetry("/api/jobs/import", {
+        method: "POST",
+        body: JSON.stringify({ deleteNos: batch })
+      }, 3);
+
+      deleted += Number(result.deleted || 0);
+
+      if (Array.isArray(result.invalid)) {
+        invalid = invalid.concat(result.invalid.map(item => ({ ...item, deleteBatch: batchNo })));
+      }
+
+      await sleep(300);
+    }
+
     if (invalid.length) {
       console.warn("Save invalid rows", invalid);
     }
@@ -439,7 +470,7 @@ async function handleExcelUpload(e) {
     syncFeeRowsWithJobs();
 
     showToast(
-      `저장 완료: 신규 ${inserted.toLocaleString()}건, 수정 ${updated.toLocaleString()}건` +
+      `반영 완료: 신규 ${inserted.toLocaleString()}건, 수정 ${updated.toLocaleString()}건, 삭제 ${deleted.toLocaleString()}건` +
       (invalid.length ? `, 제외 ${invalid.length.toLocaleString()}건` : "")
     );
   } catch (err) {
