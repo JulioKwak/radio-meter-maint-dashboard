@@ -8,13 +8,15 @@ const REGIONS = [
 const EXPENSE_ITEMS = ["인건비", "전문가 수수료", "차량렌탈비", "차량유지비", "출장비", "성과급", "자재비"];
 const PAGE_SIZE = 20;
 
-const CHART_PALETTE = [
-  "#181d26", "#aa2d00", "#0a2e0e", "#d9a441",
-  "#458fff", "#a8d8c4", "#fcab79", "#f4d35e"
-];
+const CHART_INCOME_COLOR = "#1b61c9";
+const CHART_EXPENSE_COLOR = "#aa2d00";
 
-function chartColor(i) {
-  return CHART_PALETTE[i % CHART_PALETTE.length];
+// 카테고리 수가 많아져도(단가표 유형 등) 색상이 겹치지 않도록,
+// 황금각(137.508˚)으로 색상환을 순회하며 밝기를 번갈아 만듭니다.
+function categoricalColor(i) {
+  const hue = (i * 137.508) % 360;
+  const lightness = i % 2 === 0 ? 38 : 54;
+  return `hsl(${hue.toFixed(1)}, 55%, ${lightness}%)`;
 }
 
 let app = {
@@ -997,7 +999,7 @@ function renderIncomeCharts(byType) {
       datasets: [{
         data: amounts,
         counts,
-        backgroundColor: labels.map((_, i) => chartColor(i)),
+        backgroundColor: labels.map((_, i) => categoricalColor(i)),
         borderColor: "#ffffff",
         borderWidth: 2
       }]
@@ -1037,8 +1039,8 @@ function renderIncomeCharts(byType) {
     data: {
       labels: months,
       datasets: [
-        { label: "수입", data: incomeData, backgroundColor: chartColor(0) },
-        { label: "지출", data: expenseData, backgroundColor: chartColor(1) }
+        { label: "수입", data: incomeData, backgroundColor: CHART_INCOME_COLOR },
+        { label: "지출", data: expenseData, backgroundColor: CHART_EXPENSE_COLOR }
       ]
     },
     options: {
@@ -1167,7 +1169,7 @@ function renderExpenseChart() {
   const labels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
   const datasets = EXPENSE_ITEMS.map((item, i) => ({
     label: item,
-    backgroundColor: chartColor(i),
+    backgroundColor: categoricalColor(i),
     data: Array.from({ length: 12 }, (_, i2) => {
       const monthKey = `${year}-${String(i2 + 1).padStart(2, "0")}`;
       return Number(app.expenses.monthlyExpenses?.[monthKey]?.[item]) || 0;
