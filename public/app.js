@@ -46,6 +46,7 @@ async function init() {
   fillRegionSelects();
   fillYearSelect();
   fillSettlementYearSelect();
+  fillBalanceYearSelect();
   bindExcelUpload();
   bindModalClose();
   setDefaultDateFilters();
@@ -89,6 +90,25 @@ function fillSettlementYearSelect() {
     select.appendChild(opt);
   }
   document.getElementById("settlement-quarter").value = String(currentQuarter());
+}
+
+function fillBalanceYearSelect() {
+  const select = document.getElementById("balance-year");
+  const y = new Date().getFullYear();
+  select.innerHTML = "";
+  for (let year = 2024; year <= y + 10; year++) {
+    const opt = document.createElement("option");
+    opt.value = String(year);
+    opt.textContent = `${year}년`;
+    if (year === y) opt.selected = true;
+    select.appendChild(opt);
+  }
+  document.getElementById("balance-quarter").value = String(currentQuarter());
+}
+
+function quarterMonths(year, quarter) {
+  const startMonth = (quarter - 1) * 3 + 1;
+  return [startMonth, startMonth + 1, startMonth + 2].map(m => `${year}-${String(m).padStart(2, "0")}`);
 }
 
 async function reloadAll() {
@@ -188,6 +208,7 @@ function showPage(id) {
   }
   if (id === "expense") setTimeout(() => { renderExpense(); renderExpenseChart(); }, 100);
   if (id === "settlement") setTimeout(loadSettlement, 100);
+  if (id === "balance") setTimeout(loadBalance, 100);
 }
 
 function renderManagerOptions() {
@@ -1267,6 +1288,54 @@ async function saveSettlement() {
   } catch (err) {
     showToast("정산현황 저장 실패: " + err.message, true);
   }
+}
+
+async function loadBalance() {
+  const year = Number(document.getElementById("balance-year").value) || new Date().getFullYear();
+  const quarter = Number(document.getElementById("balance-quarter").value) || currentQuarter();
+
+  try {
+    const data = await apiFetch(`/api/settlements?year=${year}&quarter=${quarter}`);
+    renderBalance(year, quarter, data.totals || {});
+  } catch (err) {
+    showToast("수입/지출 현황 조회 실패: " + err.message, true);
+  }
+}
+
+function renderBalance(year, quarter, incomeTotals) {
+  const count = Number(incomeTotals.count || 0);
+  const baseAmount = Number(incomeTotals.baseAmount || 0);
+  const actualCost = Number(incomeTotals.actualCost || 0);
+  const incomeTotal = Number(incomeTotals.amount || 0);
+
+  document.getElementById("bal-income-count").textContent = `${count.toLocaleString()}건`;
+  document.getElementById("bal-income-base").textContent = won(baseAmount);
+  document.getElementById("bal-income-actual").textContent = won(actualCost);
+  document.getElementById("bal-income-total").textContent = won(incomeTotal);
+
+  const months = quarterMonths(year, quarter);
+  const monthly = app.expenses.monthlyExpenses || {};
+  const expenseTbody = document.getElementById("balance-expense-tbody");
+
+  let expenseTotal = 0;
+  expenseTbody.innerHTML = EXPENSE_ITEMS.map(item => {
+    const sum = months.reduce((s, monthKey) => s + (Number(monthly[monthKey]?.[item]) || 0), 0);
+    expenseTotal += sum;
+    return `
+      <tr>
+        <td>${escapeHtml(item)}</td>
+        <td class="amt-expense">${won(sum)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("bal-expense-total").textContent = won(expenseTotal);
+
+  const net = incomeTotal - expenseTotal;
+  const netEl = document.getElementById("bal-net-amount");
+  netEl.textContent = (net >= 0 ? "+" : "-") + won(Math.abs(net));
+  netEl.classList.remove("amt-income", "amt-expense");
+  netEl.classList.add(net >= 0 ? "amt-income" : "amt-expense");
 }
 
 function closeModal(id) {

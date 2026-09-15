@@ -21,10 +21,13 @@
       <span class="icon">📋</span> 작업현황
     </button>
     <button class="nav-item" onclick="showPage('income')" id="nav-income">
-      <span class="icon">💰</span> 수입/지출 현황
+      <span class="icon">💰</span> 수입/지출 예상 현황
     </button>
     <button class="nav-item" onclick="showPage('settlement')" id="nav-settlement">
       <span class="icon">🧾</span> 정산현황
+    </button>
+    <button class="nav-item" onclick="showPage('balance')" id="nav-balance">
+      <span class="icon">💹</span> 수입/지출 현황
     </button>
     <button class="nav-item" onclick="showPage('unit')" id="nav-unit">
       <span class="icon">📄</span> 유지보수 단가표 모음
@@ -146,7 +149,7 @@
     <div class="page" id="page-income">
       <div class="page-header">
         <div>
-          <h2>💰 수입/지출 현황</h2>
+          <h2>💰 수입/지출 예상 현황</h2>
           <div class="subtitle">완료 건수와 단가표, 지출관리 입력값 기준으로 계산합니다.</div>
         </div>
       </div>
@@ -273,6 +276,77 @@
       </div>
       <div class="notice">
         수수료는 분기 종료일 기준으로 단가표에서 자동으로 가져옵니다. 합계금액 = 건수 × 수수료 + 실비 입니다.
+      </div>
+    </div>
+
+    <div class="page" id="page-balance">
+      <div class="page-header">
+        <div>
+          <h2>💹 수입/지출 현황</h2>
+          <div class="subtitle">정산현황과 지출관리 데이터를 분기 기준으로 비교합니다.</div>
+        </div>
+        <div class="header-actions">
+          <select id="balance-year" class="select-like" onchange="loadBalance()"></select>
+          <select id="balance-quarter" class="select-like" onchange="loadBalance()">
+            <option value="1">1분기 (1~3월)</option>
+            <option value="2">2분기 (4~6월)</option>
+            <option value="3">3분기 (7~9월)</option>
+            <option value="4">4분기 (10~12월)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card-grid-1">
+        <div class="card">
+          <div class="card-title">📈 분기별 수입 합계 (정산현황 기준)</div>
+          <div class="stat-grid four">
+            <div class="stat-card">
+              <div class="label">건수</div>
+              <div class="value amt-income" id="bal-income-count">0건</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">금액</div>
+              <div class="value amt-income" id="bal-income-base">₩0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">실비</div>
+              <div class="value amt-income" id="bal-income-actual">₩0</div>
+            </div>
+            <div class="stat-card highlighted">
+              <div class="label">최종금액</div>
+              <div class="value amt-income" id="bal-income-total">₩0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📉 분기별 지출 합계 (지출관리 기준)</div>
+          <div class="table-scroll">
+            <table class="balance-expense-table">
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  <th>금액</th>
+                </tr>
+              </thead>
+              <tbody id="balance-expense-tbody"></tbody>
+              <tfoot>
+                <tr>
+                  <td>합계</td>
+                  <td id="bal-expense-total" class="amt-expense">₩0</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💹 수지 계산</div>
+          <div class="balance-result">
+            <span>수입 최종금액 − 지출 합계 =</span>
+            <span id="bal-net-amount">₩0</span>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -188,6 +188,7 @@ main {
 }
 
 .stat-grid.three { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+.stat-grid.four { grid-template-columns: repeat(4, minmax(150px, 1fr)); }
 
 .stat-card {
   background: var(--canvas);
@@ -738,6 +739,38 @@ tr:hover td { background: var(--surface-soft); }
 .settlement-table tfoot td:nth-child(7) {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.amt-income { color: var(--info); }
+.amt-expense { color: var(--accent-coral); }
+
+.balance-expense-table td:nth-child(2),
+.balance-expense-table th:nth-child(2) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-expense-table tfoot td {
+  background: var(--surface-soft);
+  border-top: 2px solid var(--hairline);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.balance-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.balance-result span:last-child {
+  font-size: 28px;
+  font-weight: 600;
 }
 
 .notice {
