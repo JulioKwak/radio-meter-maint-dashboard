@@ -853,6 +853,24 @@ tr:hover td { background: var(--surface-soft); }
   min-width: 70px;
 }
 
+.expense-row-value {
+  flex: 1;
+  text-align: right;
+  font-size: 12px;
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.expense-summary-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--ink);
+}
+
+.expense-summary-card .month-label {
+  color: var(--ink);
+}
+
 .expense-row input {
   flex: 1;
   height: 28px;

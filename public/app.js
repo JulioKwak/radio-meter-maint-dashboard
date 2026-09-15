@@ -1101,10 +1101,15 @@ function renderExpense() {
   const grid = document.getElementById("expense-grid");
   grid.innerHTML = "";
 
+  const yearlyTotals = {};
+  EXPENSE_ITEMS.forEach(item => { yearlyTotals[item] = 0; });
+
   for (let m = 1; m <= 12; m++) {
     const monthKey = `${year}-${String(m).padStart(2, "0")}`;
     const items = app.expenses.monthlyExpenses[monthKey] || {};
     const total = EXPENSE_ITEMS.reduce((sum, item) => sum + (Number(items[item]) || 0), 0);
+
+    EXPENSE_ITEMS.forEach(item => { yearlyTotals[item] += Number(items[item]) || 0; });
 
     const card = document.createElement("div");
     card.className = "expense-month-card";
@@ -1126,6 +1131,26 @@ function renderExpense() {
     `;
     grid.appendChild(card);
   }
+
+  const yearlyGrandTotal = EXPENSE_ITEMS.reduce((sum, item) => sum + yearlyTotals[item], 0);
+  const summaryCard = document.createElement("div");
+  summaryCard.className = "expense-month-card expense-summary-card";
+  summaryCard.innerHTML = `
+    <div class="month-label">
+      <span>${year}년 항목별 합계</span>
+      <span>${won(yearlyGrandTotal)}</span>
+    </div>
+    ${EXPENSE_ITEMS.map(item => `
+      <div class="expense-row">
+        <label>${item}</label>
+        <span class="expense-row-value">${won(yearlyTotals[item])}</span>
+      </div>
+    `).join("")}
+    <div class="expense-total">
+      <span>연간 합계</span><span>${won(yearlyGrandTotal)}</span>
+    </div>
+  `;
+  grid.appendChild(summaryCard);
 
   renderExpenseChart();
 }
