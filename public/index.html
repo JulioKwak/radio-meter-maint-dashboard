@@ -23,6 +23,9 @@
     <button class="nav-item" onclick="showPage('income')" id="nav-income">
       <span class="icon">💰</span> 수입/지출 현황
     </button>
+    <button class="nav-item" onclick="showPage('settlement')" id="nav-settlement">
+      <span class="icon">🧾</span> 정산현황
+    </button>
     <button class="nav-item" onclick="showPage('unit')" id="nav-unit">
       <span class="icon">📄</span> 유지보수 단가표 모음
     </button>
@@ -214,6 +217,62 @@
             </tfoot>
           </table>
         </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-settlement">
+      <div class="page-header">
+        <div>
+          <h2>🧾 정산현황</h2>
+          <div class="subtitle">분기별로 유형별 건수와 실비를 입력해 정산 금액을 관리합니다.</div>
+        </div>
+        <div class="header-actions">
+          <select id="settlement-year" class="select-like" onchange="loadSettlement()"></select>
+          <select id="settlement-quarter" class="select-like" onchange="loadSettlement()">
+            <option value="1">1분기 (1~3월)</option>
+            <option value="2">2분기 (4~6월)</option>
+            <option value="3">3분기 (7~9월)</option>
+            <option value="4">4분기 (10~12월)</option>
+          </select>
+          <button class="btn btn-success" onclick="saveSettlement()">💾 저장</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <span class="title">분기별 정산 내역</span>
+          <span class="muted" id="settlement-period-label"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="editable-table settlement-table">
+            <thead>
+              <tr>
+                <th>결과유형</th>
+                <th>건수</th>
+                <th>수수료</th>
+                <th>금액</th>
+                <th>실비</th>
+                <th>비고</th>
+                <th>합계금액</th>
+              </tr>
+            </thead>
+            <tbody id="settlement-tbody"></tbody>
+            <tfoot>
+              <tr>
+                <td>합계</td>
+                <td id="settlement-total-count">0건</td>
+                <td>-</td>
+                <td id="settlement-total-base">₩0</td>
+                <td id="settlement-total-actual">₩0</td>
+                <td>-</td>
+                <td id="settlement-total-amount">₩0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="notice">
+        수수료는 분기 종료일 기준으로 단가표에서 자동으로 가져옵니다. 합계금액 = 건수 × 수수료 + 실비 입니다.
       </div>
     </div>
 

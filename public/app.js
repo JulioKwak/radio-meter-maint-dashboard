@@ -8,6 +8,15 @@ const REGIONS = [
 const EXPENSE_ITEMS = ["인건비", "전문가 수수료", "차량렌탈비", "차량유지비", "출장비", "성과급", "자재비"];
 const PAGE_SIZE = 20;
 
+const CHART_PALETTE = [
+  "#181d26", "#aa2d00", "#0a2e0e", "#d9a441",
+  "#458fff", "#a8d8c4", "#fcab79", "#f4d35e"
+];
+
+function chartColor(i) {
+  return CHART_PALETTE[i % CHART_PALETTE.length];
+}
+
 let app = {
   jobs: [],
   filteredJobs: [],
@@ -15,6 +24,11 @@ let app = {
   allFees: [],
   expenses: {
     monthlyExpenses: {}
+  },
+  settlement: {
+    year: new Date().getFullYear(),
+    quarter: currentQuarter(),
+    rows: []
   },
   currentPage: 1,
   editingMaintenanceNo: null,
@@ -31,6 +45,7 @@ async function init() {
 
   fillRegionSelects();
   fillYearSelect();
+  fillSettlementYearSelect();
   bindExcelUpload();
   bindModalClose();
   setDefaultDateFilters();
@@ -56,6 +71,24 @@ function fillYearSelect() {
     if (year === y) opt.selected = true;
     select.appendChild(opt);
   }
+}
+
+function currentQuarter() {
+  return Math.floor(new Date().getMonth() / 3) + 1;
+}
+
+function fillSettlementYearSelect() {
+  const select = document.getElementById("settlement-year");
+  const y = new Date().getFullYear();
+  select.innerHTML = "";
+  for (let year = 2024; year <= y + 10; year++) {
+    const opt = document.createElement("option");
+    opt.value = String(year);
+    opt.textContent = `${year}년`;
+    if (year === y) opt.selected = true;
+    select.appendChild(opt);
+  }
+  document.getElementById("settlement-quarter").value = String(currentQuarter());
 }
 
 async function reloadAll() {
@@ -154,6 +187,7 @@ function showPage(id) {
     setTimeout(renderIncome, 100);
   }
   if (id === "expense") setTimeout(() => { renderExpense(); renderExpenseChart(); }, 100);
+  if (id === "settlement") setTimeout(loadSettlement, 100);
 }
 
 function renderManagerOptions() {
@@ -939,7 +973,13 @@ function renderIncomeCharts(byType) {
     type: "doughnut",
     data: {
       labels,
-      datasets: [{ data: amounts, counts }]
+      datasets: [{
+        data: amounts,
+        counts,
+        backgroundColor: labels.map((_, i) => chartColor(i)),
+        borderColor: "#ffffff",
+        borderWidth: 2
+      }]
     },
     options: {
       responsive: true,
@@ -976,8 +1016,8 @@ function renderIncomeCharts(byType) {
     data: {
       labels: months,
       datasets: [
-        { label: "수입", data: incomeData },
-        { label: "지출", data: expenseData }
+        { label: "수입", data: incomeData, backgroundColor: chartColor(0) },
+        { label: "지출", data: expenseData, backgroundColor: chartColor(1) }
       ]
     },
     options: {
@@ -1104,10 +1144,11 @@ function updateMonthlyExpense(monthKey, item, value) {
 function renderExpenseChart() {
   const year = document.getElementById("expense-year").value;
   const labels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
-  const datasets = EXPENSE_ITEMS.map(item => ({
+  const datasets = EXPENSE_ITEMS.map((item, i) => ({
     label: item,
-    data: Array.from({ length: 12 }, (_, i) => {
-      const monthKey = `${year}-${String(i + 1).padStart(2, "0")}`;
+    backgroundColor: chartColor(i),
+    data: Array.from({ length: 12 }, (_, i2) => {
+      const monthKey = `${year}-${String(i2 + 1).padStart(2, "0")}`;
       return Number(app.expenses.monthlyExpenses?.[monthKey]?.[item]) || 0;
     })
   }));
@@ -1130,6 +1171,104 @@ function renderExpenseChart() {
   });
 }
 
+async function loadSettlement() {
+  const year = Number(document.getElementById("settlement-year").value) || new Date().getFullYear();
+  const quarter = Number(document.getElementById("settlement-quarter").value) || currentQuarter();
+
+  try {
+    const data = await apiFetch(`/api/settlements?year=${year}&quarter=${quarter}`);
+    app.settlement = {
+      year: data.year,
+      quarter: data.quarter,
+      rows: data.rows || []
+    };
+    renderSettlement();
+  } catch (err) {
+    showToast("정산현황 조회 실패: " + err.message, true);
+  }
+}
+
+function renderSettlement() {
+  const { year, quarter, rows } = app.settlement;
+  document.getElementById("settlement-period-label").textContent = `${year}년 ${quarter}분기`;
+
+  const tbody = document.getElementById("settlement-tbody");
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="muted">단가표에 등록된 결과유형이 없습니다.</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map((r, i) => {
+      const baseAmount = Number(r.count || 0) * Number(r.unitFee || 0);
+      const lineTotal = baseAmount + Number(r.actualCost || 0);
+      return `
+        <tr>
+          <td>${escapeHtml(r.resultType)}</td>
+          <td><input type="number" min="0" value="${Number(r.count || 0)}" onchange="updateSettlementField(${i}, 'count', this.value)"></td>
+          <td class="amount-cell">${won(r.unitFee)}</td>
+          <td class="amount-cell">${won(baseAmount)}</td>
+          <td><input type="number" min="0" value="${Number(r.actualCost || 0)}" onchange="updateSettlementField(${i}, 'actualCost', this.value)"></td>
+          <td><input type="text" value="${escapeHtml(r.note || "")}" placeholder="실비 내용" onchange="updateSettlementField(${i}, 'note', this.value)"></td>
+          <td class="amount-cell">${won(lineTotal)}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  renderSettlementTotals();
+}
+
+function renderSettlementTotals() {
+  const rows = app.settlement.rows || [];
+  const totalCount = rows.reduce((sum, r) => sum + (Number(r.count) || 0), 0);
+  const totalBase = rows.reduce((sum, r) => sum + (Number(r.count) || 0) * (Number(r.unitFee) || 0), 0);
+  const totalActual = rows.reduce((sum, r) => sum + (Number(r.actualCost) || 0), 0);
+  const totalAmount = totalBase + totalActual;
+
+  document.getElementById("settlement-total-count").textContent = `${totalCount.toLocaleString()}건`;
+  document.getElementById("settlement-total-base").textContent = won(totalBase);
+  document.getElementById("settlement-total-actual").textContent = won(totalActual);
+  document.getElementById("settlement-total-amount").textContent = won(totalAmount);
+}
+
+function updateSettlementField(idx, field, value) {
+  const row = app.settlement.rows[idx];
+  if (!row) return;
+
+  if (field === "note") {
+    row.note = String(value).trim();
+  } else {
+    row[field] = Number(value) || 0;
+  }
+
+  renderSettlement();
+}
+
+async function saveSettlement() {
+  const { year, quarter, rows } = app.settlement;
+  const payload = {
+    year,
+    quarter,
+    rows: rows.map(r => ({
+      resultType: r.resultType,
+      count: Number(r.count) || 0,
+      actualCost: Number(r.actualCost) || 0,
+      note: r.note || ""
+    }))
+  };
+
+  try {
+    const result = await apiFetch("/api/settlements", { method: "POST", body: JSON.stringify(payload) });
+    app.settlement = {
+      year: result.year,
+      quarter: result.quarter,
+      rows: result.rows || []
+    };
+    renderSettlement();
+    showToast("정산현황이 저장되었습니다.");
+  } catch (err) {
+    showToast("정산현황 저장 실패: " + err.message, true);
+  }
+}
+
 function closeModal(id) {
   document.getElementById(id).classList.remove("open");
 }
@@ -1145,7 +1284,7 @@ function bindModalClose() {
 function showToast(msg, isError = false) {
   const t = document.getElementById("toast");
   t.textContent = msg;
-  t.style.background = isError ? "var(--danger)" : "var(--gray-900)";
+  t.style.background = isError ? "var(--danger)" : "var(--ink)";
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2800);
 }

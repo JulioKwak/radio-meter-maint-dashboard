@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS maintenance_jobs;
 DROP TABLE IF EXISTS fee_rates;
 DROP TABLE IF EXISTS monthly_expenses;
 DROP TABLE IF EXISTS worker_wages;
+DROP TABLE IF EXISTS settlements;
 
 CREATE TABLE maintenance_jobs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +47,23 @@ CREATE TABLE monthly_expenses (
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(expense_year, expense_month, category)
 );
+
+CREATE TABLE settlements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  settlement_year INTEGER NOT NULL,
+  settlement_quarter INTEGER NOT NULL,
+  result_type TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  unit_fee INTEGER NOT NULL DEFAULT 0,
+  actual_cost INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  line_total INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(settlement_year, settlement_quarter, result_type)
+);
+
+CREATE INDEX idx_settlements_period ON settlements(settlement_year, settlement_quarter);
 
 CREATE INDEX idx_jobs_maintenance_no ON maintenance_jobs(maintenance_no);
 CREATE INDEX idx_jobs_status ON maintenance_jobs(status);
